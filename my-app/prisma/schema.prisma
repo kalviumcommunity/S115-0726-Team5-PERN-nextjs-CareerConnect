@@ -21,59 +21,76 @@ enum ApplicationStatus {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  name         String
-  email        String        @unique
-  password     String
-  role         Role
-  createdAt    DateTime      @default(now())
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  jobs         Job[]         @relation("EmployerJobs")
-  applications Application[]
+  // Employer side
+  jobs Job[] @relation("EmployerJobs")
+
+  // Candidate side
+  applications  Application[] @relation("CandidateApplications")
   notifications Notification[]
+
+  @@index([role])
+  @@map("users")
 }
 
 model Job {
-  id          String        @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
   description String
   company     String
   location    String
-  salary      String
-
+  salary      Int
   employerId  String
-  employer    User          @relation("EmployerJobs", fields: [employerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  employer     User          @relation("EmployerJobs", fields: [employerId], references: [id], onDelete: Cascade)
   applications Application[]
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  @@index([employerId])
+  @@index([location])
+  @@index([createdAt])
+  @@map("jobs")
 }
 
 model Application {
-  id           String             @id @default(cuid())
+  id          String            @id @default(cuid())
+  candidateId String
+  jobId       String
+  status      ApplicationStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  candidateId  String
-  candidate    User               @relation(fields: [candidateId], references: [id])
+  candidate User @relation("CandidateApplications", fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  jobId        String
-  job          Job                @relation(fields: [jobId], references: [id])
-
-  status       ApplicationStatus  @default(PENDING)
-
-  createdAt    DateTime           @default(now())
+  // A candidate can only apply once to a given job.
+  @@unique([candidateId, jobId])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([status])
+  @@map("applications")
 }
 
 model Notification {
   id        String   @id @default(cuid())
-
+  userId    String
   title     String
   message   String
-
   isRead    Boolean  @default(false)
-
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@map("notifications")
 }
