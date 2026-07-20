@@ -216,3 +216,67 @@ function LoginContent() {
               </button>
             </div>
           </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className={`w-full py-3 mt-4 text-sm font-semibold text-white rounded-xl shadow-md transition-all ${
+              loginRole === "employer"
+                ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200"
+                : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {activeTab === "login" ? "Login" : "Sign Up"}
+          </button>
+        </form>
+
+        
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-3.5 text-gray-500 font-bold">or</span>
+          </div>
+        </div>
+
+        
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          className="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 rounded-xl bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+        >
+          <Globe className="w-5 h-5 text-blue-600" />
+          Continue with Google
+        </button>
+
+        
+        <div className="text-center mt-6">
+          <p className="text-xs text-gray-500 font-medium">
+            {activeTab === "login" ? "New to Career Connect?" : "Already have an account?"}{" "}
+            <button
+              onClick={() => setActiveTab(activeTab === "login" ? "register" : "login")}
+              className={`font-bold hover:underline ${
+                loginRole === "employer" ? "text-indigo-600" : "text-blue-600"
+              }`}
+            >
+              {activeTab === "login" ? "Sign up" : "Log in"}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center font-sans">
+        <p className="text-sm font-semibold text-gray-500">Loading Career Connect...</p>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
+  );
+}
