@@ -1,32 +1,34 @@
-import { createJobSchema, listJobsQuerySchema } from "@/lib/validations";
+import { NextRequest } from "next/server";
 import { jobService } from "@/services/job.service";
-import { requireRole } from "@/lib/session";
-import { successResponse, withErrorHandling } from "@/lib/api-response";
+import { requireEmployer } from "@/lib/auth";
+import { CreateJobSchema, JobQuerySchema } from "@/lib/validations";
+import {
+  handleApiError,
+  paginatedMeta,
+  successResponse,
+} from "@/lib/api-response";
+import { parseBody, parseQuery } from "@/utils/parse-request";
 
-// GET /api/jobs?search=&location=&sort=&page=&limit=
-// GET /api/jobs?mine=true  -> jobs posted by the authenticated employer
-// Public by default: candidates (or anyone) can browse jobs without authenticating.
-export const GET = withErrorHandling(async (req: Request) => {
-  const { searchParams } = new URL(req.url);
-  const mine = searchParams.get("mine") === "true";
-  const query = listJobsQuerySchema.parse(Object.fromEntries(searchParams));
+export async function GET(request: NextRequest) {
+  try {
+    const query = parseQuery(JobQuerySchema, request.nextUrl.searchParams);
+    const result = await jobService.listJobs(query);
 
-  if (mine) {
-    const employer = await requireRole("EMPLOYER");
-    const result = await jobService.listForEmployer(employer.id, query);
-    return successResponse(result);
+    return successResponse(result.items, 200, paginatedMeta(result.page, result.limit, result.total));
+  } catch (error) {
+    return handleApiError(error);
   }
+}
 
-  const result = await jobService.list(query);
-  return successResponse(result);
-});
+export async function POST(request: NextRequest) {
+  try {
+    const user = await requireEmployer();
+    const body = await request.json();
+    const input = parseBody(CreateJobSchema, body);
+    const job = await jobService.createJob(user, input);
 
-// POST /api/jobs
-// Employer only.
-export const POST = withErrorHandling(async (req: Request) => {
-  const employer = await requireRole("EMPLOYER");
-  const body = await req.json();
-  const input = createJobSchema.parse(body);
-  const job = await jobService.create(employer.id, input);
-  return successResponse(job, 201);
-});
+    return successResponse(job, 201);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

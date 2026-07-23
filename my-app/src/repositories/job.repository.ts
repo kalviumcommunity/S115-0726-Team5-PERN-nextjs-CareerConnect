@@ -1,99 +1,74 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
-import type { ListJobsQuery } from "@/lib/validations";
+import type { CreateJobInput, JobQueryInput, UpdateJobInput } from "@/lib/validations";
 
-function buildOrderBy(sort: ListJobsQuery["sort"]): Prisma.JobOrderByWithRelationInput {
-  switch (sort) {
-    case "oldest":
-      return { createdAt: "asc" };
-    case "salary_asc":
-      return { salary: "asc" };
-    case "salary_desc":
-      return { salary: "desc" };
-    case "latest":
-    default:
-      return { createdAt: "desc" };
-  }
-}
+const jobInclude = {
+  employer: {
+    select: { id: true, name: true, email: true },
+  },
+  _count: {
+    select: { applications: true },
+  },
+} satisfies Prisma.JobInclude;
 
 export const jobRepository = {
-  async findMany(query: ListJobsQuery) {
-    const where: Prisma.JobWhereInput = {
-      ...(query.search
-        ? {
-            OR: [
-              { title: { contains: query.search, mode: "insensitive" } },
-              { company: { contains: query.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(query.location
-        ? { location: { contains: query.location, mode: "insensitive" } }
-        : {}),
-    };
-
-    const [items, total] = await Promise.all([
-      prisma.job.findMany({
-        where,
-        orderBy: buildOrderBy(query.sort),
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-        include: { _count: { select: { applications: true } } },
-      }),
-      prisma.job.count({ where }),
-    ]);
-
-    return { items, total };
-  },
-
-  async findByEmployer(employerId: string, query: ListJobsQuery) {
-    const where: Prisma.JobWhereInput = {
-      employerId,
-      ...(query.search
-        ? {
-            OR: [
-              { title: { contains: query.search, mode: "insensitive" } },
-              { company: { contains: query.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    };
-    const [items, total] = await Promise.all([
-      prisma.job.findMany({
-        where,
-        orderBy: buildOrderBy(query.sort),
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-        include: { _count: { select: { applications: true } } },
-      }),
-      prisma.job.count({ where }),
-    ]);
-    return { items, total };
+  create(data: CreateJobInput & { employerId: string }) {
+    return prisma.job.create({
+      data,
+      include: jobInclude,
+    });
   },
 
   findById(id: string) {
     return prisma.job.findUnique({
       where: { id },
-      include: { _count: { select: { applications: true } } },
+      include: jobInclude,
     });
   },
 
-  create(data: {
-    title: string;
-    description: string;
-    company: string;
-    location: string;
-    salary: number;
-    employerId: string;
-  }) {
-    return prisma.job.create({ data });
-  },
-
-  update(id: string, data: Partial<Prisma.JobUpdateInput>) {
-    return prisma.job.update({ where: { id }, data });
+  update(id: string, data: UpdateJobInput) {
+    return prisma.job.update({
+      where: { id },
+      data,
+      include: jobInclude,
+    });
   },
 
   delete(id: string) {
     return prisma.job.delete({ where: { id } });
+  },
+
+  async findMany(query: JobQueryInput) {
+    const { page, limit, search, location, sort, order, employerId } = query;
+
+    const where: Prisma.JobWhereInput = {
+      ...(employerId ? { employerId } : {}),
+      ...(location
+        ? { location: { contains: location, mode: "insensitive" } }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: "insensitive" } },
+              { company: { contains: search, mode: "insensitive" } },
+              { description: { contains: search, mode: "insensitive" } },
+              { location: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.job.findMany({
+        where,
+        include: jobInclude,
+        orderBy: { [sort]: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.job.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
   },
 };

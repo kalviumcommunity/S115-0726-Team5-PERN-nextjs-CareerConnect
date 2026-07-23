@@ -1,14 +1,22 @@
-import { markNotificationsReadSchema } from "@/lib/validations";
+import { NextRequest } from "next/server";
 import { notificationService } from "@/services/notification.service";
-import { requireUser } from "@/lib/session";
-import { successResponse, withErrorHandling } from "@/lib/api-response";
+import { requireAuth } from "@/lib/auth";
+import { MarkNotificationsReadSchema } from "@/lib/validations";
+import { handleApiError, successResponse } from "@/lib/api-response";
+import { parseBody } from "@/utils/parse-request";
 
-// PATCH /api/notifications/read
-// Body: { notificationIds?: string[] }  — omit to mark ALL as read
-export const PATCH = withErrorHandling(async (req: Request) => {
-  const user = await requireUser();
-  const body = await req.json().catch(() => ({}));
-  const { notificationIds } = markNotificationsReadSchema.parse(body);
-  const count = await notificationService.markRead(user.id, notificationIds);
-  return successResponse({ markedRead: count });
-});
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await requireAuth();
+    const body = await request.json();
+    const input = parseBody(MarkNotificationsReadSchema, body);
+    const result = await notificationService.markNotificationsRead(
+      user,
+      input.notificationIds,
+    );
+
+    return successResponse(result);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

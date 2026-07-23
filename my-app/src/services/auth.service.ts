@@ -1,44 +1,38 @@
-import bcrypt from "bcrypt";
-import { userRepository } from "@/repositories/user.repository";
-import { ApiError } from "@/lib/api-response";
-import type { RegisterInput } from "@/lib/validations";
-
-const SALT_ROUNDS = 10;
+import { Role } from "@prisma/client";
+import { authRepository } from "@/repositories/auth.repository";
+import { ConflictError } from "@/lib/errors";
+import { hashPassword, verifyPassword, sanitizeUser } from "@/utils/password";
+import type { LoginInput, RegisterInput } from "@/lib/validations";
 
 export const authService = {
   async register(input: RegisterInput) {
-    const existing = await userRepository.findByEmail(input.email);
+    const existing = await authRepository.findByEmail(input.email);
     if (existing) {
-      throw ApiError.conflict("An account with this email already exists");
+      throw new ConflictError("Email is already registered");
     }
 
-    const hashedPassword = await bcrypt.hash(input.password, SALT_ROUNDS);
-
-    const user = await userRepository.create({
+    const hashedPassword = await hashPassword(input.password);
+    const user = await authRepository.create({
       name: input.name,
       email: input.email,
       password: hashedPassword,
-      role: input.role,
+      role: input.role as Role,
     });
 
-    // Never return the password hash to the client.
-    const { password: _password, ...safeUser } = user;
-    return safeUser;
+    return sanitizeUser(user);
   },
 
-  /**
-   * Used by the NextAuth Credentials provider. Returns the safe user
-   * object on success, or null on invalid credentials (NextAuth expects
-   * null rather than a thrown error for "authorize" failures).
-   */
-  async validateCredentials(email: string, password: string) {
-    const user = await userRepository.findByEmail(email.toLowerCase());
-    if (!user) return null;
+  async validateCredentials(input: LoginInput) {
+    const user = await authRepository.findByEmail(input.email);
+    if (!user) {
+      return null;
+    }
 
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return null;
+    const isValid = await verifyPassword(input.password, user.password);
+    if (!isValid) {
+      return null;
+    }
 
-    const { password: _password, ...safeUser } = user;
-    return safeUser;
+    return sanitizeUser(user);
   },
 };
