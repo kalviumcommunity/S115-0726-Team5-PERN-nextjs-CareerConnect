@@ -1,126 +1,223 @@
+import { ApplicationStatus, Role } from "@prisma/client";
 import { applicationRepository } from "@/repositories/application.repository";
 import { jobRepository } from "@/repositories/job.repository";
-import { notificationRepository } from "@/repositories/notification.repository";
+import { notificationService } from "@/services/notification.service";
 import { socketService } from "@/services/socket.service";
-import { ApiError } from "@/lib/api-response";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "@/lib/errors";
 import type {
-  ListApplicationsQuery,
-  BatchUpdateApplicationInput,
+  ApplicationQueryInput,
+  ApplicationStatusInput,
+  BatchUpdateApplicationsInput,
+  CreateApplicationInput,
 } from "@/lib/validations";
-import type { ApplicationStatus } from "@prisma/client";
+import type { AuthenticatedUser } from "@/types";
 
-const STATUS_MESSAGES: Record<ApplicationStatus, string> = {
-  PENDING: "is pending review",
-  VIEWED: "has been viewed by the employer",
-  SHORTLISTED: "has been shortlisted",
-  REJECTED: "was not selected this time",
-  ACCEPTED: "has been accepted",
+const STATUS_LABELS: Record<ApplicationStatus, string> = {
+  PENDING: "Pending",
+  VIEWED: "Viewed",
+  SHORTLISTED: "Shortlisted",
+  REJECTED: "Rejected",
+  ACCEPTED: "Accepted",
 };
 
-function paginationMeta(query: ListApplicationsQuery, total: number) {
-  return {
-    page: query.page,
-    limit: query.limit,
-    total,
-    totalPages: Math.ceil(total / query.limit),
-  };
+function assertCanAccessApplication(
+  user: AuthenticatedUser,
+  application: NonNullable<
+    Awaited<ReturnType<typeof applicationRepository.findById>>
+  >,
+) {
+  const isCandidate = user.role === Role.CANDIDATE && application.candidateId === user.id;
+  const isEmployer =
+    user.role === Role.EMPLOYER &&
+    application.job.employerId === user.id;
+
+  if (!isCandidate && !isEmployer) {
+    throw new ForbiddenError("You do not have access to this application");
+  }
+}
+
+async function notifyStatusChange(
+  candidateId: string,
+  jobTitle: string,
+  company: string,
+  status: ApplicationStatus,
+  application: NonNullable<
+    Awaited<ReturnType<typeof applicationRepository.findById>>
+  >,
+) {
+  const title = "Application status updated";
+  const message = `Your application for ${jobTitle} at ${company} is now ${STATUS_LABELS[status]}.`;
+
+  await notificationService.createAndNotify(candidateId, title, message);
+
+  socketService.emitApplicationUpdated(candidateId, {
+    application: {
+      id: application.id,
+      candidateId: application.candidateId,
+      jobId: application.jobId,
+      status: application.status,
+      updatedAt: application.updatedAt.toISOString(),
+      job: {
+        id: application.job.id,
+        title: application.job.title,
+        company: application.job.company,
+      },
+    },
+  });
 }
 
 export const applicationService = {
-  async apply(candidateId: string, jobId: string) {
-    const job = await jobRepository.findById(jobId);
-    if (!job) throw ApiError.notFound("Job not found");
-
-    const existing = await applicationRepository.findExisting(candidateId, jobId);
-    if (existing) {
-      throw ApiError.conflict("You have already applied to this job");
+  async createApplication(
+    user: AuthenticatedUser,
+    input: CreateApplicationInput,
+  ) {
+    if (user.role !== Role.CANDIDATE) {
+      throw new ForbiddenError("Only candidates can apply to jobs");
     }
 
-    return applicationRepository.create({ candidateId, jobId });
-  },
+    const job = await jobRepository.findById(input.jobId);
+    if (!job) {
+      throw new NotFoundError("Job not found");
+    }
 
-  async listForCandidate(candidateId: string, query: ListApplicationsQuery) {
-    const { items, total } = await applicationRepository.findByCandidate(candidateId, query);
-    return { applications: items, pagination: paginationMeta(query, total) };
-  },
+    const existing = await applicationRepository.findByCandidateAndJob(
+      user.id,
+      input.jobId,
+    );
+    if (existing) {
+      throw new ConflictError("You have already applied to this job");
+    }
 
-  async listForEmployer(employerId: string, query: ListApplicationsQuery) {
-    const { items, total } = await applicationRepository.findByEmployer(employerId, query);
-    return { applications: items, pagination: paginationMeta(query, total) };
-  },
+    const application = await applicationRepository.create({
+      candidateId: user.id,
+      jobId: input.jobId,
+    });
 
-  async getById(userId: string, role: "CANDIDATE" | "EMPLOYER", applicationId: string) {
-    const application = await applicationRepository.findById(applicationId);
-    if (!application) throw ApiError.notFound("Application not found");
+    await notificationService.createAndNotify(
+      user.id,
+      "Application submitted",
+      `Your application for ${job.title} at ${job.company} has been submitted.`,
+    );
 
-    const isOwner =
-      role === "CANDIDATE"
-        ? application.candidateId === userId
-        : application.job.employerId === userId;
-
-    if (!isOwner) throw ApiError.forbidden("You do not have access to this application");
     return application;
   },
 
-  /**
-   * Employer updates a single application's status. Creates a notification
-   * for the candidate and emits a real-time socket event.
-   */
-  async updateStatus(employerId: string, applicationId: string, status: ApplicationStatus) {
-    const application = await applicationRepository.findById(applicationId);
-    if (!application) throw ApiError.notFound("Application not found");
-    if (application.job.employerId !== employerId) {
-      throw ApiError.forbidden("You can only update applications for your own jobs");
+  async listApplications(user: AuthenticatedUser, query: ApplicationQueryInput) {
+    if (user.role === Role.CANDIDATE) {
+      return applicationRepository.findManyForCandidate(user.id, query);
     }
 
-    const updated = await applicationRepository.updateStatus(applicationId, status);
+    if (user.role === Role.EMPLOYER) {
+      return applicationRepository.findManyForEmployer(user.id, query);
+    }
 
-    const notification = await notificationRepository.create({
-      userId: updated.candidateId,
-      title: `Application update: ${updated.job.title}`,
-      message: `Your application for ${updated.job.title} at ${updated.job.company} ${STATUS_MESSAGES[status]}.`,
-    });
+    throw new ForbiddenError("Invalid role for listing applications");
+  },
 
-    socketService.emitApplicationUpdated(updated.candidateId, updated);
-    socketService.emitNewNotification(updated.candidateId, notification);
+  async getApplicationById(user: AuthenticatedUser, id: string) {
+    const application = await applicationRepository.findById(id);
+    if (!application) {
+      throw new NotFoundError("Application not found");
+    }
+
+    assertCanAccessApplication(user, application);
+    return application;
+  },
+
+  async updateApplicationStatus(
+    user: AuthenticatedUser,
+    id: string,
+    input: ApplicationStatusInput,
+  ) {
+    if (user.role !== Role.EMPLOYER) {
+      throw new ForbiddenError("Only employers can update application status");
+    }
+
+    const application = await applicationRepository.findById(id);
+    if (!application) {
+      throw new NotFoundError("Application not found");
+    }
+
+    if (application.job.employerId !== user.id) {
+      throw new ForbiddenError(
+        "You can only update applications for your own jobs",
+      );
+    }
+
+    const updated = await applicationRepository.updateStatus(
+      id,
+      input.status as ApplicationStatus,
+    );
+
+    if (updated.status !== application.status) {
+      await notifyStatusChange(
+        updated.candidateId,
+        updated.job.title,
+        updated.job.company,
+        updated.status,
+        updated,
+      );
+    }
 
     return updated;
   },
 
-  /**
-   * Employer updates many applications at once (e.g. selecting rows and
-   * bulk-marking as "Viewed"). Only applications belonging to jobs the
-   * employer owns are updated; the rest are silently ignored to avoid
-   * leaking information about applications the employer doesn't own.
-   */
-  async batchUpdateStatus(employerId: string, input: BatchUpdateApplicationInput) {
-    const candidates = await applicationRepository.findManyByIds(input.applicationIds);
-    const ownedIds = candidates
-      .filter((a) => a.job.employerId === employerId)
-      .map((a) => a.id);
-
-    if (ownedIds.length === 0) {
-      throw ApiError.forbidden("None of the specified applications belong to your jobs");
+  async batchUpdateApplicationStatus(
+    user: AuthenticatedUser,
+    input: BatchUpdateApplicationsInput,
+  ) {
+    if (user.role !== Role.EMPLOYER) {
+      throw new ForbiddenError("Only employers can batch update applications");
     }
 
-    await applicationRepository.batchUpdateStatus(ownedIds, input.status);
-    const updated = await applicationRepository.findManyByIds(ownedIds);
-
-    const notifications = await Promise.all(
-      updated.map((application) =>
-        notificationRepository.create({
-          userId: application.candidateId,
-          title: `Application update: ${application.job.title}`,
-          message: `Your application for ${application.job.title} at ${application.job.company} ${STATUS_MESSAGES[input.status]}.`,
-        })
-      )
+    const applications = await applicationRepository.findManyByIds(
+      input.applicationIds,
     );
 
-    socketService.emitBatchApplicationsUpdated(updated);
-    notifications.forEach((notification) =>
-      socketService.emitNewNotification(notification.userId, notification)
-    );
+    if (applications.length !== input.applicationIds.length) {
+      throw new NotFoundError("One or more applications were not found");
+    }
 
-    return { updatedCount: ownedIds.length, applications: updated };
+    const unauthorized = applications.some(
+      (app) => app.job.employerId !== user.id,
+    );
+    if (unauthorized) {
+      throw new ForbiddenError(
+        "You can only update applications for your own jobs",
+      );
+    }
+
+    const [, updatedApplications] =
+      await applicationRepository.batchUpdateStatus(
+        input.applicationIds,
+        input.status as ApplicationStatus,
+      );
+
+    const candidateIds = updatedApplications.map((app) => app.candidateId);
+
+    for (const app of updatedApplications) {
+      await notificationService.createAndNotify(
+        app.candidateId,
+        "Application status updated",
+        `Your application for ${app.job.title} at ${app.job.company} is now ${STATUS_LABELS[input.status as ApplicationStatus]}.`,
+      );
+    }
+
+    socketService.emitApplicationBatchUpdated(candidateIds, {
+      applications: updatedApplications.map((app) => ({
+        id: app.id,
+        candidateId: app.candidateId,
+        jobId: app.jobId,
+        status: app.status,
+        updatedAt: app.updatedAt.toISOString(),
+      })),
+      status: input.status,
+    });
+
+    return updatedApplications;
   },
 };

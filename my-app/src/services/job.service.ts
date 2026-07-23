@@ -1,59 +1,59 @@
+import { Role } from "@prisma/client";
 import { jobRepository } from "@/repositories/job.repository";
-import { ApiError } from "@/lib/api-response";
-import type { CreateJobInput, ListJobsQuery, UpdateJobInput } from "@/lib/validations";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import type {
+  CreateJobInput,
+  JobQueryInput,
+  UpdateJobInput,
+} from "@/lib/validations";
+import type { AuthenticatedUser } from "@/types";
 
 export const jobService = {
-  async list(query: ListJobsQuery) {
-    const { items, total } = await jobRepository.findMany(query);
-    return {
-      jobs: items,
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
-    };
+  async listJobs(query: JobQueryInput) {
+    return jobRepository.findMany(query);
   },
 
-  async listForEmployer(employerId: string, query: ListJobsQuery) {
-    const { items, total } = await jobRepository.findByEmployer(employerId, query);
-    return {
-      jobs: items,
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
-      },
-    };
-  },
-
-  async getById(id: string) {
+  async getJobById(id: string) {
     const job = await jobRepository.findById(id);
-    if (!job) throw ApiError.notFound("Job not found");
+    if (!job) {
+      throw new NotFoundError("Job not found");
+    }
     return job;
   },
 
-  async create(employerId: string, input: CreateJobInput) {
-    return jobRepository.create({ ...input, employerId });
+  async createJob(user: AuthenticatedUser, input: CreateJobInput) {
+    if (user.role !== Role.EMPLOYER) {
+      throw new ForbiddenError("Only employers can create jobs");
+    }
+
+    return jobRepository.create({
+      ...input,
+      employerId: user.id,
+    });
   },
 
-  async update(employerId: string, jobId: string, input: UpdateJobInput) {
-    const job = await jobRepository.findById(jobId);
-    if (!job) throw ApiError.notFound("Job not found");
-    if (job.employerId !== employerId) {
-      throw ApiError.forbidden("You can only edit jobs you posted");
+  async updateJob(
+    user: AuthenticatedUser,
+    id: string,
+    input: UpdateJobInput,
+  ) {
+    const job = await this.getJobById(id);
+
+    if (user.role !== Role.EMPLOYER || job.employerId !== user.id) {
+      throw new ForbiddenError("You can only update your own jobs");
     }
-    return jobRepository.update(jobId, input);
+
+    return jobRepository.update(id, input);
   },
 
-  async delete(employerId: string, jobId: string) {
-    const job = await jobRepository.findById(jobId);
-    if (!job) throw ApiError.notFound("Job not found");
-    if (job.employerId !== employerId) {
-      throw ApiError.forbidden("You can only delete jobs you posted");
+  async deleteJob(user: AuthenticatedUser, id: string) {
+    const job = await this.getJobById(id);
+
+    if (user.role !== Role.EMPLOYER || job.employerId !== user.id) {
+      throw new ForbiddenError("You can only delete your own jobs");
     }
-    await jobRepository.delete(jobId);
+
+    await jobRepository.delete(id);
+    return { id };
   },
 };

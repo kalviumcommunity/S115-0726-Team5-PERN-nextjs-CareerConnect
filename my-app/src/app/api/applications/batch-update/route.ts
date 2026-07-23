@@ -1,14 +1,22 @@
-import { batchUpdateApplicationSchema } from "@/lib/validations";
+import { NextRequest } from "next/server";
 import { applicationService } from "@/services/application.service";
-import { requireRole } from "@/lib/session";
-import { successResponse, withErrorHandling } from "@/lib/api-response";
+import { requireAuth } from "@/lib/auth";
+import { BatchUpdateApplicationsSchema } from "@/lib/validations";
+import { handleApiError, successResponse } from "@/lib/api-response";
+import { parseBody } from "@/utils/parse-request";
 
-// PATCH /api/applications/batch-update
-// Body: { applicationIds: string[], status: ApplicationStatus }
-export const PATCH = withErrorHandling(async (req: Request) => {
-  const employer = await requireRole("EMPLOYER");
-  const body = await req.json();
-  const input = batchUpdateApplicationSchema.parse(body);
-  const result = await applicationService.batchUpdateStatus(employer.id, input);
-  return successResponse(result);
-});
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await requireAuth();
+    const body = await request.json();
+    const input = parseBody(BatchUpdateApplicationsSchema, body);
+    const applications = await applicationService.batchUpdateApplicationStatus(
+      user,
+      input,
+    );
+
+    return successResponse(applications);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

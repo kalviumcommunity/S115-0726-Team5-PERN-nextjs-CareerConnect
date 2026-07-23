@@ -1,13 +1,29 @@
+import { NextRequest } from "next/server";
 import { notificationService } from "@/services/notification.service";
-import { requireUser } from "@/lib/session";
-import { successResponse, withErrorHandling } from "@/lib/api-response";
+import { requireAuth } from "@/lib/auth";
+import { NotificationQuerySchema } from "@/lib/validations";
+import {
+  handleApiError,
+  paginatedMeta,
+  successResponse,
+} from "@/lib/api-response";
+import { parseQuery } from "@/utils/parse-request";
 
-// GET /api/notifications?page=&limit=
-export const GET = withErrorHandling(async (req: Request) => {
-  const user = await requireUser();
-  const { searchParams } = new URL(req.url);
-  const page = Number(searchParams.get("page") ?? 1);
-  const limit = Number(searchParams.get("limit") ?? 20);
-  const result = await notificationService.list(user.id, page, limit);
-  return successResponse(result);
-});
+export async function GET(request: NextRequest) {
+  try {
+    const user = await requireAuth();
+    const query = parseQuery(
+      NotificationQuerySchema,
+      request.nextUrl.searchParams,
+    );
+    const result = await notificationService.listNotifications(user, query);
+
+    return successResponse(
+      result.items,
+      200,
+      paginatedMeta(result.page, result.limit, result.total),
+    );
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

@@ -1,38 +1,50 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import type { NotificationQueryInput } from "@/lib/validations";
 
 export const notificationRepository = {
   create(data: { userId: string; title: string; message: string }) {
     return prisma.notification.create({ data });
   },
 
-  createMany(data: { userId: string; title: string; message: string }[]) {
+  createMany(data: Array<{ userId: string; title: string; message: string }>) {
     return prisma.notification.createMany({ data });
   },
 
-  async findByUser(userId: string, page: number, limit: number) {
-    const [items, total, unreadCount] = await Promise.all([
+  findById(id: string) {
+    return prisma.notification.findUnique({ where: { id } });
+  },
+
+  async findManyForUser(userId: string, query: NotificationQueryInput) {
+    const { page, limit, isRead } = query;
+    const where: Prisma.NotificationWhereInput = {
+      userId,
+      ...(isRead !== undefined ? { isRead } : {}),
+    };
+
+    const [items, total] = await Promise.all([
       prisma.notification.findMany({
-        where: { userId },
+        where,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.notification.count({ where: { userId } }),
-      prisma.notification.count({ where: { userId, isRead: false } }),
+      prisma.notification.count({ where }),
     ]);
-    return { items, total, unreadCount };
+
+    return { items, total, page, limit };
   },
 
-  markAllRead(userId: string) {
+  markAsRead(ids: string[], userId: string) {
     return prisma.notification.updateMany({
-      where: { userId, isRead: false },
+      where: { id: { in: ids }, userId },
       data: { isRead: true },
     });
   },
 
-  markManyRead(userId: string, ids: string[]) {
+  markAllAsRead(userId: string) {
     return prisma.notification.updateMany({
-      where: { userId, id: { in: ids } },
+      where: { userId, isRead: false },
       data: { isRead: true },
     });
   },

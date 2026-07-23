@@ -1,49 +1,52 @@
-import { getSocketServer } from "@/lib/socket-instance";
+import { getIO } from "@/socket/emitter";
 import { logger } from "@/lib/logger";
-import type { Application, Notification } from "@prisma/client";
+import type {
+  SocketApplicationUpdatedPayload,
+  SocketBatchUpdatedPayload,
+  SocketNotificationPayload,
+} from "@/types";
 
-function userRoom(userId: string) {
+function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
 export const socketService = {
-  /**
-   * Notify a single candidate that one of their applications changed status.
-   */
-  emitApplicationUpdated(candidateId: string, application: Application & { job?: { title: string; company: string } }) {
-    const io = getSocketServer();
-    if (!io) {
-      logger.warn("Socket.IO server not initialized; skipping emit");
-      return;
-    }
-    io.to(userRoom(candidateId)).emit("application:updated", { application });
-  },
-
-  /**
-   * Notify multiple candidates after an employer batch-updates statuses.
-   * Each candidate only receives events for their own applications.
-   */
-  emitBatchApplicationsUpdated(
-    applications: (Application & { job?: { title: string; company: string } })[]
+  emitApplicationUpdated(
+    candidateId: string,
+    payload: SocketApplicationUpdatedPayload,
   ) {
-    const io = getSocketServer();
+    const io = getIO();
     if (!io) {
-      logger.warn("Socket.IO server not initialized; skipping emit");
+      logger.warn("Socket.IO not initialized; skipping application:updated emit");
       return;
     }
-    for (const application of applications) {
-      io.to(userRoom(application.candidateId)).emit("application:batch-updated", {
-        application,
-      });
-    }
+    io.to(userRoom(candidateId)).emit("application:updated", payload);
   },
 
-  emitNewNotification(userId: string, notification: Notification) {
-    const io = getSocketServer();
+  emitNotificationNew(userId: string, payload: SocketNotificationPayload) {
+    const io = getIO();
     if (!io) {
-      logger.warn("Socket.IO server not initialized; skipping emit");
+      logger.warn("Socket.IO not initialized; skipping notification:new emit");
       return;
     }
-    io.to(userRoom(userId)).emit("notification:new", { notification });
+    io.to(userRoom(userId)).emit("notification:new", payload);
+  },
+
+  emitApplicationBatchUpdated(
+    candidateIds: string[],
+    payload: SocketBatchUpdatedPayload,
+  ) {
+    const io = getIO();
+    if (!io) {
+      logger.warn(
+        "Socket.IO not initialized; skipping application:batch-updated emit",
+      );
+      return;
+    }
+
+    const uniqueCandidateIds = [...new Set(candidateIds)];
+    for (const candidateId of uniqueCandidateIds) {
+      io.to(userRoom(candidateId)).emit("application:batch-updated", payload);
+    }
   },
 };
