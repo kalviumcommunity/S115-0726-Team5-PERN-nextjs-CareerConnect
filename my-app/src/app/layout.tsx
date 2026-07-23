@@ -9,6 +9,7 @@ const inter = Inter({
   variable: "--font-sans",
 });
 
+
 export const metadata: Metadata = {
   title: "Career Connect - Premium Job Portal",
   description: "Find your dream job or the perfect candidate with real-time tracking.",
