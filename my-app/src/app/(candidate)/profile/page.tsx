@@ -187,42 +187,111 @@ export default function CandidateProfilePage() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-          <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
-            <User className="w-4.5 h-4.5 text-blue-600" />
-            Personal Information
-          </h3>
-          <div className="space-y-3.5 text-xs">
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Full Name</span>
-              <span className="font-bold text-gray-800">{profile.name}</span>
+        <div className="space-y-6">
+          
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
+              <User className="w-4.5 h-4.5 text-blue-600" />
+              Personal Information
+            </h3>
+            <div className="space-y-3.5 text-xs">
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Full Name</span>
+                <span className="font-bold text-gray-800">{profile.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Email</span>
+                <span className="font-bold text-gray-800">{profile.email}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Phone</span>
+                <span className="font-bold text-gray-800">{profile.phone}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Location</span>
+                <span className="font-bold text-gray-800">{profile.location}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Date of Birth</span>
+                <span className="font-bold text-gray-800">{profile.dob}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Current Status</span>
+                <span className="px-2.5 py-1 font-bold text-[10px] rounded-full bg-green-50 text-green-700 border border-green-200/50">
+                  {profile.status}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Email</span>
-              <span className="font-bold text-gray-800">{profile.email}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Phone</span>
-              <span className="font-bold text-gray-800">{profile.phone}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Location</span>
-              <span className="font-bold text-gray-800">{profile.location}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Date of Birth</span>
-              <span className="font-bold text-gray-800">{profile.dob}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Current Status</span>
-              <span className="px-2.5 py-1 font-bold text-[10px] rounded-full bg-green-50 text-green-700 border border-green-200/50">
-                {profile.status}
+          </div>
+
+          
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
+              <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-mono">
+                &lt;/&gt;
               </span>
+              Skills
+            </h3>
+
+            <div className="flex flex-wrap gap-1.5">
+              {profile.skills.map((skill, index) => (
+                <span
+                  key={index}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1"
+                >
+                  {skill}
+                  <button
+                    onClick={() => handleRemoveSkill(skill)}
+                    className="hover:bg-blue-100 rounded text-blue-500 hover:text-blue-700 p-0.5 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div className="pt-2">
+              {showAddSkillInput ? (
+                <form onSubmit={handleAddSkill} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter skill (e.g. Docker)"
+                    value={newSkill}
+                    onChange={(e) => setNewSkill(e.target.value)}
+                    className="block w-full px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shrink-0"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddSkillInput(false);
+                      setNewSkill("");
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setShowAddSkillInput(true)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100/50"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Skill
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-      <div className="space-y-6">
+        
+        <div className="space-y-6">
           
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
             <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
@@ -273,131 +342,66 @@ export default function CandidateProfilePage() {
               Upload New Resume
             </button>
           </div>
-        </div>
 
-        
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-          <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
-            <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-mono">
-              &lt;/&gt;
-            </span>
-            Skills
-          </h3>
-
-          <div className="flex flex-wrap gap-1.5">
-            {profile.skills.map((skill, index) => (
-              <span
-                key={index}
-                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1"
-              >
-                {skill}
-                <button
-                  onClick={() => handleRemoveSkill(skill)}
-                  className="hover:bg-blue-100 rounded text-blue-500 hover:text-blue-700 p-0.5 transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="pt-2">
-            {showAddSkillInput ? (
-              <form onSubmit={handleAddSkill} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter skill (e.g. Docker)"
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  className="block w-full px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shrink-0"
-                >
-                  Add
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddSkillInput(false);
-                    setNewSkill("");
-                  }}
-                  className="px-3 py-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 shrink-0"
-                >
-                  Cancel
-                </button>
-              </form>
-            ) : (
+          
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+              <h3 className="font-bold text-gray-950 text-base flex items-center gap-2">
+                <User className="w-4.5 h-4.5 text-blue-600" />
+                Preferences
+              </h3>
               <button
-                onClick={() => setShowAddSkillInput(true)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100/50"
+                onClick={() => {
+                  setPrefRoles(profile.preferences.roles.join(", "));
+                  setPrefLocations(profile.preferences.locations.join(", "));
+                  setPrefJobTypes(profile.preferences.jobTypes);
+                  setPrefExperience(profile.preferences.experience);
+                  setShowPreferencesModal(true);
+                }}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"
               >
-                <Plus className="w-3.5 h-3.5" />
-                Add Skill
+                <Edit2 className="w-3 h-3" /> Edit Preferences
               </button>
-            )}
-          </div>
-        </div>
+            </div>
 
-        
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-          <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-            <h3 className="font-bold text-gray-950 text-base flex items-center gap-2">
-              <User className="w-4.5 h-4.5 text-blue-600" />
-              Preferences
+            <div className="space-y-3.5 text-xs">
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Preferred Job Roles</span>
+                <span className="font-bold text-gray-800 text-right">{profile.preferences.roles.join(", ")}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Preferred Locations</span>
+                <span className="font-bold text-gray-800 text-right">{profile.preferences.locations.join(", ")}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Job Types</span>
+                <span className="font-bold text-gray-800 text-right">{profile.preferences.jobTypes}</span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-gray-400">Experience Level</span>
+                <span className="font-bold text-gray-800 text-right">{profile.preferences.experience}</span>
+              </div>
+            </div>
+          </div>
+
+          
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
+              <Lock className="w-4.5 h-4.5 text-blue-600" />
+              Account Security
             </h3>
-            <button
-              onClick={() => {
-                setPrefRoles(profile.preferences.roles.join(", "));
-                setPrefLocations(profile.preferences.locations.join(", "));
-                setPrefJobTypes(profile.preferences.jobTypes);
-                setPrefExperience(profile.preferences.experience);
-                setShowPreferencesModal(true);
-              }}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"
-            >
-              <Edit2 className="w-3 h-3" /> Edit
-            </button>
-          </div>
-
-          <div className="space-y-3.5 text-xs">
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Preferred Job Roles</span>
-              <span className="font-bold text-gray-800">{profile.preferences.roles.join(", ")}</span>
+            <div className="flex justify-between items-center">
+              <div className="text-xs">
+                <p className="font-bold text-gray-900">Password</p>
+                <p className="text-gray-400 mt-1 font-medium">â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢</p>
+              </div>
+              <button
+                onClick={() => toast.success("Password change link sent to email!")}
+                className="px-4 py-2 border border-gray-200 text-xs font-bold text-blue-600 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+              >
+                Change Password
+              </button>
             </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Preferred Locations</span>
-              <span className="font-bold text-gray-800">{profile.preferences.locations.join(", ")}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Job Types</span>
-              <span className="font-bold text-gray-800">{profile.preferences.jobTypes}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="font-semibold text-gray-400">Experience Level</span>
-              <span className="font-bold text-gray-800">{profile.preferences.experience}</span>
-            </div>
-          </div>
-        </div>
-
-        
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4 md:col-span-2">
-          <h3 className="font-bold text-gray-950 text-base flex items-center gap-2 border-b border-gray-50 pb-2">
-            <Lock className="w-4.5 h-4.5 text-blue-600" />
-            Account Security
-          </h3>
-          <div className="flex justify-between items-center">
-            <div className="text-xs">
-              <p className="font-bold text-gray-900">Password</p>
-              <p className="text-gray-400 mt-1 font-medium">â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢</p>
-            </div>
-            <button
-              onClick={() => toast.success("Password change link sent to email!")}
-              className="px-4 py-2 border border-gray-200 text-xs font-bold text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
-            >
-              Change Password
-            </button>
           </div>
         </div>
       </div>

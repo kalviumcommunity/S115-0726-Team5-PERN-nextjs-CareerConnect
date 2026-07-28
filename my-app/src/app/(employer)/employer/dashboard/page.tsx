@@ -179,7 +179,11 @@ export default function EmployerDashboard() {
                   
                   <td className="py-4.5 px-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 font-extrabold text-xs flex items-center justify-center border border-indigo-100">
+                      <div className={`w-9 h-9 rounded-lg font-extrabold text-xs flex items-center justify-center text-white ${
+                        ['RK', 'SR', 'MP'].includes(app.candidateInitials) ? 'bg-purple-600' :
+                        ['AS', 'PK'].includes(app.candidateInitials) ? 'bg-green-600' :
+                        'bg-blue-600'
+                      }`}>
                         {app.candidateInitials}
                       </div>
                       <div>

@@ -55,81 +55,69 @@ export default function CandidateDashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in font-sans">
       
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-6 md:p-8 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none transform translate-y-6 translate-x-6">
-          <Briefcase className="w-64 h-64" />
-        </div>
-        <div className="max-w-xl">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-            Welcome back, {profile.name}! ðŸ‘‹
-          </h1>
-          <p className="text-blue-100/90 text-sm md:text-base mt-2 font-medium">
-            You have {pendingCount} application reviews pending. Keep track of your responses and notifications below.
-          </p>
-
-        </div>
+      <div>
+        <h1 className="text-2xl md:text-[28px] font-bold text-gray-900 tracking-tight flex items-center gap-2">
+          Welcome back, {profile.name.split(' ')[0]}! <span className="text-2xl">👋</span>
+        </h1>
+        <p className="text-gray-500 text-sm md:text-base mt-1.5 font-medium">
+          Track all your job applications in one place.
+        </p>
       </div>
 
       
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-            <Briefcase className="w-6 h-6" />
+        <div className="bg-[#f4f7ff] p-6 rounded-[20px] flex flex-col gap-4 relative overflow-hidden">
+          <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-blue-600">
+            <Briefcase className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Applied</p>
-            <p className="text-2xl font-black text-gray-900 mt-0.5">{totalApplied}</p>
+            <p className="text-[32px] font-bold text-gray-900 leading-none">{totalApplied}</p>
+            <p className="text-[13px] text-gray-500 font-semibold mt-2">Total Applications</p>
           </div>
         </div>
 
         
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-            <Clock className="w-6 h-6" />
+        <div className="bg-[#fffdf4] p-6 rounded-[20px] flex flex-col gap-4 relative overflow-hidden">
+          <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-amber-500">
+            <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Pending</p>
-            <p className="text-2xl font-black text-gray-900 mt-0.5">{pendingCount}</p>
+            <p className="text-[32px] font-bold text-gray-900 leading-none">{pendingCount}</p>
+            <p className="text-[13px] text-gray-500 font-semibold mt-2">Pending</p>
           </div>
         </div>
 
         
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-green-50 text-green-600 rounded-xl">
-            <CheckCircle2 className="w-6 h-6" />
+        <div className="bg-[#f4fff8] p-6 rounded-[20px] flex flex-col gap-4 relative overflow-hidden">
+          <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-emerald-500">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Shortlisted</p>
-            <p className="text-2xl font-black text-gray-900 mt-0.5">{viewedCount}</p>
+            <p className="text-[32px] font-bold text-gray-900 leading-none">{viewedCount}</p>
+            <p className="text-[13px] text-gray-500 font-semibold mt-2">Viewed</p>
           </div>
         </div>
 
         
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-red-50 text-red-600 rounded-xl">
-            <XCircle className="w-6 h-6" />
+        <div className="bg-[#fff4f4] p-6 rounded-[20px] flex flex-col gap-4 relative overflow-hidden">
+          <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-red-500">
+            <XCircle className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Rejected</p>
-            <p className="text-2xl font-black text-gray-900 mt-0.5">{rejectedCount}</p>
+            <p className="text-[32px] font-bold text-gray-900 leading-none">{rejectedCount}</p>
+            <p className="text-[13px] text-gray-500 font-semibold mt-2">Rejected</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="space-y-6">
         
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm lg:col-span-2 overflow-hidden flex flex-col">
-          <div className="p-5 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-950 text-base">Recent Applications</h3>
-            <button
-              onClick={() => setCandidatePage("applications")}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"
-            >
-              View All <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+            <h3 className="font-bold text-gray-900 text-[17px]">Recent Applications</h3>
           </div>
 
           <div className="overflow-x-auto flex-1">
@@ -140,23 +128,27 @@ export default function CandidateDashboard() {
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">
-                    <th className="py-3 px-5">Job Title</th>
-                    <th className="py-3 px-5">Company</th>
-                    <th className="py-3 px-5">Applied Date</th>
-                    <th className="py-3 px-5">Status</th>
+                  <tr className="bg-white text-[12px] font-bold text-gray-900 border-b border-gray-100">
+                    <th className="py-4 px-6 font-semibold">Job Title</th>
+                    <th className="py-4 px-6 font-semibold">Company</th>
+                    <th className="py-4 px-6 font-semibold">Status</th>
+                    <th className="py-4 px-6 font-semibold">Applied On</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {myApplications.slice(0, 5).map((app) => (
-                    <tr key={app.id} className="hover:bg-slate-50/50 transition-colors text-sm text-gray-700">
-                      <td className="py-4 px-5 font-semibold text-gray-900">{app.jobTitle}</td>
-                      <td className="py-4 px-5 font-medium">{app.company}</td>
-                      <td className="py-4 px-5 text-gray-500 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                  {myApplications.slice(0, 6).map((app) => (
+                    <tr key={app.id} className="hover:bg-slate-50/50 transition-colors text-[13px] text-gray-700">
+                      <td className="py-4 px-6 font-semibold text-gray-900">{app.jobTitle}</td>
+                      <td className="py-4 px-6 font-semibold flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-[#0a2540] text-white flex items-center justify-center text-xs font-bold shrink-0">
+                          {app.company.substring(0, 2).toUpperCase()}
+                        </div>
+                        {app.company}
+                      </td>
+                      <td className="py-4 px-6">{getStatusBadge(app.status)}</td>
+                      <td className="py-4 px-6 text-gray-500 font-medium">
                         {app.appliedDate}
                       </td>
-                      <td className="py-4 px-5">{getStatusBadge(app.status)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -166,55 +158,21 @@ export default function CandidateDashboard() {
         </div>
 
         
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
-          <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
-            <h3 className="font-bold text-gray-950 text-base flex items-center gap-2">
-              <Bell className="w-4 h-4 text-blue-600" />
-              Notifications
-            </h3>
-            <button
-              onClick={() => setCandidatePage("notifications")}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700"
-            >
-              See All
-            </button>
+        <div className="bg-[#f8fafc] rounded-2xl border border-blue-100/50 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">Recommended Jobs for You</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Based on your profile and preferences</p>
+            </div>
           </div>
-
-          <div className="space-y-4 overflow-y-auto max-h-72 flex-1 pr-1">
-            {myApplications.length === 0 ? (
-              <div className="text-center py-6 text-sm text-gray-500">No updates yet</div>
-            ) : (
-              myApplications.slice(0, 3).map((app, idx) => {
-                let msg = "";
-                let style = "";
-                if (app.status === "Pending") {
-                  msg = `Your application for ${app.jobTitle} is under review.`;
-                  style = "bg-amber-50 text-amber-600";
-                } else if (app.status === "Shortlisted") {
-                  msg = `Congratulations! You have been shortlisted for ${app.jobTitle}.`;
-                  style = "bg-green-50 text-green-600";
-                } else if (app.status === "Rejected") {
-                  msg = `Unfortunately, you were not selected for ${app.jobTitle}.`;
-                  style = "bg-red-50 text-red-600";
-                } else {
-                  msg = `Your application for ${app.jobTitle} status updated to: ${app.status}.`;
-                  style = "bg-blue-50 text-blue-600";
-                }
-
-                return (
-                  <div key={idx} className="flex gap-3 text-xs border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${style} font-bold`}>
-                      {idx + 1}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{app.jobTitle}</p>
-                      <p className="text-gray-500 mt-0.5">{msg}</p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <Link href="/jobs" className="px-5 py-2.5 bg-white border border-gray-200 text-blue-600 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors whitespace-nowrap shadow-sm">
+            View Jobs
+          </Link>
         </div>
       </div>
     </div>
