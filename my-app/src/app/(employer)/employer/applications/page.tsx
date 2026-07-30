@@ -21,23 +21,36 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCw,
-  Maximize2
+  Maximize2,
+  Layers
 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function EmployerApplicationsPage() {
-  const { applications, updateApplicationStatus } = useApp();
+  const { 
+    applications, 
+    updateApplicationStatus, 
+    selectedAppIds, 
+    toggleAppSelection, 
+    selectAllApps, 
+    deselectAllApps, 
+    batchUpdateStatus 
+  } = useApp();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [jobFilter, setJobFilter] = useState("");
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [resumePage, setResumePage] = useState<1 | 2>(1);
+  const [batchStatus, setBatchStatus] = useState<Application["status"]>("Shortlisted");
+
   const selectedApp = selectedAppId ? applications.find((a) => a.id === selectedAppId) ?? null : null;
   const totalAppsCount = applications.length + 237;
   const pendingCount = applications.filter((a) => a.status === "Pending").length + 72;
   const reviewedCount = applications.filter((a) => a.status !== "Pending").length + 96;
   const hiredCount = applications.filter((a) => a.status === "Hired").length + 25;
   const rejectedCount = applications.filter((a) => a.status === "Rejected").length + 39;
+  
   const filteredApps = applications.filter((app) => {
     const matchesSearch =
       app.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -48,6 +61,20 @@ export default function EmployerApplicationsPage() {
 
     return matchesSearch && matchesStatus && matchesJob;
   });
+
+  const isAllVisibleSelected = filteredApps.length > 0 && filteredApps.every(app => selectedAppIds.includes(app.id));
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const idsToAdd = filteredApps.map(app => app.id);
+      const newSelectedIds = Array.from(new Set([...selectedAppIds, ...idsToAdd]));
+      selectAllApps(newSelectedIds);
+    } else {
+      const visibleIds = new Set(filteredApps.map(app => app.id));
+      const newSelectedIds = selectedAppIds.filter(id => !visibleIds.has(id));
+      selectAllApps(newSelectedIds);
+    }
+  };
 
   const getStatusClass = (status: string) => {
     switch (status) {
@@ -79,7 +106,7 @@ export default function EmployerApplicationsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       
       <div>
         <h1 className="text-2xl font-extrabold text-gray-950 tracking-tight">Applications</h1>
@@ -89,7 +116,6 @@ export default function EmployerApplicationsPage() {
       
       <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
-          
           <select
             value={jobFilter}
             onChange={(e) => setJobFilter(e.target.value)}
@@ -103,7 +129,6 @@ export default function EmployerApplicationsPage() {
             ))}
           </select>
 
-          
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -118,7 +143,6 @@ export default function EmployerApplicationsPage() {
           </select>
         </div>
 
-        
         <div className="relative w-full md:w-80">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
             <Search className="w-4.5 h-4.5" />
@@ -207,13 +231,18 @@ export default function EmployerApplicationsPage() {
       </div>
 
       
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col pb-16">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">
                 <th className="py-3.5 px-6">
-                  <input type="checkbox" className="rounded text-indigo-600 focus:ring-indigo-500" />
+                  <input 
+                    type="checkbox" 
+                    checked={isAllVisibleSelected}
+                    onChange={handleSelectAll}
+                    className="rounded text-indigo-600 focus:ring-indigo-500" 
+                  />
                 </th>
                 <th className="py-3.5 px-6">Candidate</th>
                 <th className="py-3.5 px-6">Job Position</th>
@@ -223,67 +252,78 @@ export default function EmployerApplicationsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredApps.map((app) => (
-                <tr key={app.id} className="hover:bg-slate-50/50 transition-colors text-sm text-gray-700">
-                  <td className="py-4.5 px-6">
-                    <input type="checkbox" className="rounded text-indigo-600 focus:ring-indigo-500" />
-                  </td>
-                  
-                  <td className="py-4.5 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 font-extrabold text-xs flex items-center justify-center border border-indigo-200">
-                        {app.candidateInitials}
+              {filteredApps.map((app) => {
+                const isSelected = selectedAppIds.includes(app.id);
+                return (
+                  <tr 
+                    key={app.id} 
+                    className={`hover:bg-slate-50/50 transition-colors text-sm text-gray-700 ${isSelected ? 'bg-blue-50/30' : ''}`}
+                  >
+                    <td className="py-4.5 px-6">
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected}
+                        onChange={() => toggleAppSelection(app.id)}
+                        className="rounded text-indigo-600 focus:ring-indigo-500" 
+                      />
+                    </td>
+                    
+                    <td className="py-4.5 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 font-extrabold text-xs flex items-center justify-center border border-indigo-200">
+                          {app.candidateInitials}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-gray-950 text-xs leading-tight">{app.candidateName}</h4>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{app.candidateEmail}</p>
+                          <p className="text-[10px] text-gray-400">{app.candidatePhone}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-extrabold text-gray-950 text-xs leading-tight">{app.candidateName}</h4>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{app.candidateEmail}</p>
-                        <p className="text-[10px] text-gray-400">{app.candidatePhone}</p>
+                    </td>
+                    
+                    <td className="py-4.5 px-6">
+                      <h4 className="font-bold text-gray-900 text-xs">{app.jobTitle}</h4>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{app.company}</p>
+                    </td>
+                    
+                    <td className="py-4.5 px-6 text-gray-500 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        <span>{app.appliedDate}</span>
                       </div>
-                    </div>
-                  </td>
-                  
-                  <td className="py-4.5 px-6">
-                    <h4 className="font-bold text-gray-900 text-xs">{app.jobTitle}</h4>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{app.company}</p>
-                  </td>
-                  
-                  <td className="py-4.5 px-6 text-gray-500 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                      <span>{app.appliedDate}</span>
-                    </div>
-                  </td>
-                  
-                  <td className="py-4.5 px-6">
-                    <select
-                      value={app.status}
-                      onChange={(e) => updateApplicationStatus(app.id, e.target.value as Application["status"])}
-                      className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border focus:outline-none ${getStatusClass(
-                        app.status
-                      )}`}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Shortlisted">Shortlisted</option>
-                      <option value="In Review">In Review</option>
-                      <option value="Hired">Hired</option>
-                      <option value="Rejected">Rejected</option>
-                    </select>
-                  </td>
-                  
-                  <td className="py-4.5 px-6">
-                    <button
-                      onClick={() => {
-                        setSelectedAppId(app.id);
-                        setResumePage(1);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100/50"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      View Resume
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    
+                    <td className="py-4.5 px-6">
+                      <select
+                        value={app.status}
+                        onChange={(e) => updateApplicationStatus(app.id, e.target.value as Application["status"])}
+                        className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border focus:outline-none ${getStatusClass(
+                          app.status
+                        )}`}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Shortlisted">Shortlisted</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Hired">Hired</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </td>
+                    
+                    <td className="py-4.5 px-6">
+                      <button
+                        onClick={() => {
+                          setSelectedAppId(app.id);
+                          setResumePage(1);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100/50"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        View Resume
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -291,7 +331,7 @@ export default function EmployerApplicationsPage() {
         
         <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-slate-50/50">
           <p className="text-xs text-gray-400 font-medium">
-            Showing 1 to {filteredApps.length} of {totalAppsCount} applications
+            Showing {filteredApps.length > 0 ? 1 : 0} to {filteredApps.length} of {totalAppsCount} applications
           </p>
           <div className="flex items-center gap-1 text-xs">
             <button className="px-2.5 py-1.5 border border-indigo-600 bg-indigo-50 text-indigo-700 rounded-lg font-bold">
@@ -313,6 +353,45 @@ export default function EmployerApplicationsPage() {
           </div>
         </div>
       </div>
+
+      {selectedAppIds.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl animate-toolbar-slide-up">
+          <div className="flex items-center gap-2 border-r border-slate-700 pr-4">
+            <span className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-bold">
+              {selectedAppIds.length}
+            </span>
+            <span className="text-sm font-semibold">selected</span>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <select
+              value={batchStatus}
+              onChange={(e) => setBatchStatus(e.target.value as Application["status"])}
+              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 text-white"
+            >
+              <option value="Pending">Pending</option>
+              <option value="Shortlisted">Shortlisted</option>
+              <option value="In Review">In Review</option>
+              <option value="Hired">Hired</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+            
+            <button 
+              onClick={() => batchUpdateStatus(batchStatus)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-sm font-bold transition-colors"
+            >
+              Apply to All
+            </button>
+            
+            <button 
+              onClick={deselectAllApps}
+              className="px-4 py-2 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
 
       
       {selectedApp && (

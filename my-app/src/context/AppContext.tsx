@@ -51,6 +51,7 @@ export interface Application {
   experience?: string;
   education?: string;
   bio?: string;
+  isNew?: boolean; // For shimmer animation on newly applied items
 }
 
 export interface AppNotification {
@@ -78,6 +79,13 @@ interface AppContextProps {
   updateApplicationStatus: (appId: string, status: Application["status"]) => void;
   notifications: AppNotification[];
   markNotificationsAsRead: () => void;
+  // New: Batch selection & update
+  selectedAppIds: string[];
+  setSelectedAppIds: React.Dispatch<React.SetStateAction<string[]>>;
+  toggleAppSelection: (appId: string) => void;
+  selectAllApps: (appIds: string[]) => void;
+  deselectAllApps: () => void;
+  batchUpdateStatus: (status: Application["status"]) => void;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -119,7 +127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: "Frontend Developer",
       company: "Tech Solutions",
       location: "Bangalore, India",
-      salary: "â‚¹8L - â‚¹12L",
+      salary: "₹8L - ₹12L",
       experience: "1 - 3 Years",
       skills: ["React", "JavaScript", "HTML", "CSS", "Tailwind CSS"],
       description: "We are looking for a passionate Frontend Developer to build beautiful, responsive web applications using React and Tailwind CSS.",
@@ -129,7 +137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: "UI/UX Designer",
       company: "Tech Solutions",
       location: "Bangalore, India",
-      salary: "â‚¹6L - â‚¹10L",
+      salary: "₹6L - ₹10L",
       experience: "1 - 3 Years",
       skills: ["Figma", "Adobe XD", "UI Design", "Prototyping"],
       description: "Join our creative team to craft engaging, user-centered digital interfaces for web and mobile products.",
@@ -139,7 +147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: "Full Stack Developer",
       company: "Tech Solutions",
       location: "Bangalore, India",
-      salary: "â‚¹12L - â‚¹18L",
+      salary: "₹12L - ₹18L",
       experience: "3 - 5 Years",
       skills: ["React", "Node.js", "Express.js", "MongoDB"],
       description: "Looking for an experienced developer capable of handling both client-side and server-side logic in a MERN stack environment.",
@@ -149,7 +157,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: "Backend Developer",
       company: "Tech Solutions",
       location: "Bangalore, India",
-      salary: "â‚¹10L - â‚¹15L",
+      salary: "₹10L - ₹15L",
       experience: "2 - 4 Years",
       skills: ["Node.js", "Express.js", "PostgreSQL", "Redis"],
       description: "Build robust, scalable APIs and microservices. Ensure high performance and low latency of backend requests.",
@@ -159,7 +167,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: "DevOps Engineer",
       company: "Tech Solutions",
       location: "Bangalore, India",
-      salary: "â‚¹14L - â‚¹20L",
+      salary: "₹14L - ₹20L",
       experience: "3 - 5 Years",
       skills: ["AWS", "Docker", "Kubernetes", "CI/CD"],
       description: "Manage and optimize cloud deployment pipelines. Monitor application uptime, scaling, and system health.",
@@ -321,12 +329,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       read: true,
     },
   ]);
+
+  // ===== Batch Selection State =====
+  const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
+
   const profileRef = useRef(profile);
   profileRef.current = profile;
   const applicationsRef = useRef(applications);
   applicationsRef.current = applications;
   const jobsRef = useRef(jobs);
   jobsRef.current = jobs;
+  const selectedAppIdsRef = useRef(selectedAppIds);
+  selectedAppIdsRef.current = selectedAppIds;
+
   const updateProfile = useCallback((updated: Partial<CandidateProfile>) => {
     setProfile((prev) => ({ ...prev, ...updated }));
     toast.success("Profile updated successfully!");
@@ -363,18 +378,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       experience: "Candidate profile simulated experience",
       education: "Candidate profile simulated education",
       bio: p.bio,
+      isNew: true,
     };
 
     setApplications((prevApps) => [newApp, ...prevApps]);
     const newNotif: AppNotification = {
       id: `notif-${Date.now()}`,
       type: "new_application",
-      title: "New Application Received",
-      message: `${p.name} applied for your job: ${job.title}.`,
-      date: "Today",
+      title: "Application Submitted!",
+      message: `Your application for ${job.title} at ${job.company} has been submitted successfully.`,
+      date: "Just now",
       read: false,
     };
     setNotifications((prev) => [newNotif, ...prev]);
+
+    // Clear the isNew flag after animation completes
+    setTimeout(() => {
+      setApplications((prevApps) =>
+        prevApps.map((app) =>
+          app.id === newApp.id ? { ...app, isNew: false } : app
+        )
+      );
+    }, 3000);
 
     toast.success(`Successfully applied for ${job.title}!`);
   }, []);
@@ -425,6 +450,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toast.success(`Application status updated to ${status}`);
   }, []);
 
+  // ===== Batch Selection Helpers =====
+  const toggleAppSelection = useCallback((appId: string) => {
+    setSelectedAppIds((prev) =>
+      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId]
+    );
+  }, []);
+
+  const selectAllApps = useCallback((appIds: string[]) => {
+    setSelectedAppIds(appIds);
+  }, []);
+
+  const deselectAllApps = useCallback(() => {
+    setSelectedAppIds([]);
+  }, []);
+
+  const batchUpdateStatus = useCallback((status: Application["status"]) => {
+    const ids = selectedAppIdsRef.current;
+    if (ids.length === 0) {
+      toast.error("No applications selected.");
+      return;
+    }
+
+    setApplications((prevApps) =>
+      prevApps.map((app) =>
+        ids.includes(app.id) ? { ...app, status } : app
+      )
+    );
+
+    // Generate notifications for each updated application
+    const apps = applicationsRef.current.filter((a) => ids.includes(a.id));
+    const newNotifs: AppNotification[] = apps.map((app) => {
+      let type: AppNotification["type"] = "viewed";
+      let title = "Application Update";
+      let message = `Your application for ${app.jobTitle} at ${app.company} has been updated to ${status}.`;
+
+      if (status === "Shortlisted" || status === "Hired") {
+        type = "accepted";
+        title = `Application ${status}!`;
+        message = `Congratulations! You have been ${status.toLowerCase()} by ${app.company} for the ${app.jobTitle} role.`;
+      } else if (status === "Rejected") {
+        type = "rejected";
+        title = "Application Rejected";
+        message = `${app.company} has updated your application for ${app.jobTitle} to Rejected.`;
+      } else if (status === "In Review") {
+        type = "viewed";
+        title = "Application In Review";
+        message = `${app.company} is reviewing your application for ${app.jobTitle}.`;
+      }
+
+      return {
+        id: `notif-batch-${Date.now()}-${app.id}`,
+        type,
+        title,
+        message,
+        date: "Just now",
+        read: false,
+      };
+    });
+
+    setNotifications((prev) => [...newNotifs, ...prev]);
+    setSelectedAppIds([]);
+
+    toast.success(`${ids.length} application${ids.length > 1 ? "s" : ""} updated to ${status}`);
+  }, []);
+
   const markNotificationsAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
@@ -447,6 +537,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateApplicationStatus,
         notifications,
         markNotificationsAsRead,
+        // Batch selection
+        selectedAppIds,
+        setSelectedAppIds,
+        toggleAppSelection,
+        selectAllApps,
+        deselectAllApps,
+        batchUpdateStatus,
       }}
     >
       {children}
