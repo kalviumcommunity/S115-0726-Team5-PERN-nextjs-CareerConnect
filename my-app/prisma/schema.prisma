@@ -3,13 +3,17 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum Role {
   CANDIDATE
   EMPLOYER
+  ADMIN
 }
 
 enum ApplicationStatus {
@@ -20,38 +24,120 @@ enum ApplicationStatus {
   ACCEPTED
 }
 
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+enum ExperienceLevel {
+  ENTRY
+  MID
+  SENIOR
+  LEAD
+  EXECUTIVE
+}
+
+enum JobCategory {
+  ENGINEERING
+  DESIGN
+  MARKETING
+  SALES
+  OPERATIONS
+  FINANCE
+  HR
+  SUPPORT
+  MANAGEMENT
+  OTHER
+}
+
+enum NotificationType {
+  APPLICATION_SUBMITTED
+  APPLICATION_VIEWED
+  APPLICATION_SHORTLISTED
+  APPLICATION_REJECTED
+  APPLICATION_ACCEPTED
+  JOB_POSTED
+  GENERAL
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
 model User {
-  id            String         @id @default(cuid())
-  name          String
-  email         String         @unique
-  password      String
-  role          Role
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  name            String
+  email           String         @unique
+  password        String
+  role            Role
+  // ── Candidate profile fields ──────────────────────────────────────────
+  phone           String?
+  location        String?
+  bio             String?
+  skills          String[]       @default([])
+  resumeUrl       String?
+  resumeUpdatedAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   jobs          Job[]          @relation("EmployerJobs")
   applications  Application[]
   notifications Notification[]
+  companies     Company[]      @relation("EmployerCompanies")
 
   @@index([role])
+  @@index([email])
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  logo        String?
+  website     String?
+  description String?
+  size        String?
+  industry    String?
+  location    String?
+  employerId  String
+  employer    User     @relation("EmployerCompanies", fields: [employerId], references: [id], onDelete: Cascade)
+  jobs        Job[]    @relation("CompanyJobs")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([employerId, name])
+  @@index([employerId])
+  @@index([name])
 }
 
 model Job {
-  id           String        @id @default(cuid())
-  title        String
-  description  String
-  company      String
-  location     String
-  salary       String
-  employerId   String
-  employer     User          @relation("EmployerJobs", fields: [employerId], references: [id], onDelete: Cascade)
-  applications Application[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id              String          @id @default(cuid())
+  title           String
+  description     String
+  company         String
+  location        String
+  salary          String
+  jobType         JobType         @default(FULL_TIME)
+  experienceLevel ExperienceLevel @default(ENTRY)
+  category        JobCategory     @default(OTHER)
+  skills          String[]        @default([])
+  isActive        Boolean         @default(true)
+  employerId      String
+  employer        User            @relation("EmployerJobs", fields: [employerId], references: [id], onDelete: Cascade)
+  companyId       String?
+  companyRef      Company?        @relation("CompanyJobs", fields: [companyId], references: [id], onDelete: SetNull)
+  applications    Application[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   @@index([employerId])
   @@index([location])
   @@index([createdAt])
+  @@index([jobType])
+  @@index([experienceLevel])
+  @@index([category])
+  @@index([isActive])
+  @@index([isActive, createdAt])
 }
 
 model Application {
@@ -61,6 +147,7 @@ model Application {
   jobId       String
   job         Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
   status      ApplicationStatus @default(PENDING)
+  coverLetter String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
@@ -68,18 +155,22 @@ model Application {
   @@index([candidateId])
   @@index([jobId])
   @@index([status])
+  @@index([candidateId, status])
+  @@index([createdAt])
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   message   String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  type      NotificationType @default(GENERAL)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
   @@index([userId])
   @@index([userId, isRead])
+  @@index([userId, createdAt])
 }

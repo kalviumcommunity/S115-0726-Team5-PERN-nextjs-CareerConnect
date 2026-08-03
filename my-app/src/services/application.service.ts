@@ -95,6 +95,7 @@ export const applicationService = {
     const application = await applicationRepository.create({
       candidateId: user.id,
       jobId: input.jobId,
+      ...(input.coverLetter ? { coverLetter: input.coverLetter } : {}),
     });
 
     await notificationService.createAndNotify(

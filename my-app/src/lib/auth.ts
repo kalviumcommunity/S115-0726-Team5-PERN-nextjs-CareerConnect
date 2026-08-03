@@ -1,5 +1,6 @@
 import { Role } from "@prisma/client";
 import { getServerSession } from "next-auth";
+import { encode } from "next-auth/jwt";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { authService } from "@/services/auth.service";
@@ -55,6 +56,12 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
       }
+      // Encode the JWT payload into a raw token string so the client can pass
+      // it to the Socket.io auth handshake for server-side verification.
+      session.token = await encode({
+        token,
+        secret: process.env.NEXTAUTH_SECRET!,
+      });
       return session;
     },
   },
@@ -70,7 +77,12 @@ export async function requireAuth(): Promise<AuthenticatedUser> {
   if (!session?.user?.id) {
     throw new UnauthorizedError("Authentication required");
   }
-  return session.user;
+  return {
+    id: session.user.id,
+    name: session.user.name ?? "",
+    email: session.user.email ?? "",
+    role: session.user.role,
+  };
 }
 
 export async function requireRole(roles: Role[]): Promise<AuthenticatedUser> {

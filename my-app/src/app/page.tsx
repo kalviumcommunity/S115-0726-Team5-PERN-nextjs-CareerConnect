@@ -275,7 +275,7 @@ export default function Home() {
               ].map((t, i) => (
                 <div key={i} className="glass p-8 rounded-3xl border border-gray-100 bg-white/50 backdrop-blur-sm hover:shadow-md transition-shadow relative">
                   <Star className="w-8 h-8 text-amber-400 absolute top-8 right-8 opacity-20" />
-                  <p className="text-gray-700 mb-6 italic relative z-10">"{t.quote}"</p>
+                  <p className="text-gray-700 mb-6 italic relative z-10">&ldquo;{t.quote}&rdquo;</p>
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${t.color}`}>
                       {t.init}

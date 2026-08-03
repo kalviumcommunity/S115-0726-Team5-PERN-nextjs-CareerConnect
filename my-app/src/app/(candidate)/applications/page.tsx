@@ -2,43 +2,46 @@
 
 import React, { useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
-import { 
-  Calendar, Building, Briefcase, Clock, 
+import { STATUS_DISPLAY } from '@/context/AppContext';
+import type { ApplicationStatus } from '@/types';
+import {
+  Calendar, Building, Briefcase, Clock,
   CheckCircle2, XCircle, Zap, Eye, Check
 } from 'lucide-react';
 
 export default function CandidateApplicationsPage() {
   const { profile, applications } = useApp();
-  
+
   const myApplications = useMemo(() => {
     if (!profile?.email || !applications) return [];
-    return applications.filter((app: any) => app.candidateEmail === profile.email);
+    return applications.filter((app) => app.candidateEmail === profile.email);
   }, [profile, applications]);
 
   const stats = useMemo(() => {
     let total = myApplications.length;
     let pending = 0;
-    let inReviewOrShortlisted = 0;
+    let active = 0;
     let rejected = 0;
 
-    myApplications.forEach((app: any) => {
-      const s = app.status?.toLowerCase() || '';
-      if (s === 'pending' || s === 'applied') pending++;
-      else if (s === 'in review' || s === 'shortlisted') inReviewOrShortlisted++;
-      else if (s === 'rejected') rejected++;
+    myApplications.forEach((app) => {
+      const s = app.status as ApplicationStatus;
+      if (s === 'PENDING') pending++;
+      else if (s === 'VIEWED' || s === 'SHORTLISTED') active++;
+      else if (s === 'REJECTED') rejected++;
     });
 
-    return { total, pending, inReviewOrShortlisted, rejected };
+    return { total, pending, active, rejected };
   }, [myApplications]);
 
-  const getStatusColor = (status: string) => {
-    const s = status?.toLowerCase() || '';
-    if (s === 'pending' || s === 'applied') return 'bg-amber-50 text-amber-700 border-amber-200';
-    if (s === 'shortlisted') return 'bg-green-50 text-green-700 border-green-200';
-    if (s === 'in review') return 'bg-blue-50 text-blue-700 border-blue-200';
-    if (s === 'hired') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    if (s === 'rejected') return 'bg-red-50 text-red-700 border-red-200';
-    return 'bg-gray-50 text-gray-700 border-gray-200';
+  const getStatusColor = (status: ApplicationStatus) => {
+    switch (status) {
+      case 'PENDING':    return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'VIEWED':     return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'SHORTLISTED': return 'bg-green-50 text-green-700 border-green-200';
+      case 'ACCEPTED':   return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'REJECTED':   return 'bg-red-50 text-red-700 border-red-200';
+      default:           return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
   };
 
   const getInitials = (name: string) => {
@@ -46,35 +49,31 @@ export default function CandidateApplicationsPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  const stages = ['Applied', 'In Review', 'Shortlisted', 'Hired'];
+  // Progress stages using canonical enum values
+  const stages: ApplicationStatus[] = ['PENDING', 'VIEWED', 'SHORTLISTED', 'ACCEPTED'];
 
-  const getStageIndex = (status: string) => {
-    const s = status?.toLowerCase() || '';
-    if (s === 'applied' || s === 'pending') return 0;
-    if (s === 'in review') return 1;
-    if (s === 'shortlisted') return 2;
-    if (s === 'hired') return 3;
-    return -1;
+  const getStageIndex = (status: ApplicationStatus): number => {
+    const idx = stages.indexOf(status);
+    return idx === -1 ? 0 : idx;
   };
 
-  const renderTimeline = (status: string) => {
-    const isRejected = status?.toLowerCase() === 'rejected';
+  const renderTimeline = (status: ApplicationStatus) => {
+    const isRejected = status === 'REJECTED';
     const currentIndex = isRejected ? 0 : getStageIndex(status);
 
     return (
       <div className="mt-8 mb-2 px-4 sm:px-8">
         <div className="relative flex items-center justify-between">
           <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-100 rounded-full z-0"></div>
-          
-          {/* Active Progress Line */}
+
           {!isRejected && (
-            <div 
+            <div
               className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-blue-500 rounded-full z-0 transition-all duration-500"
               style={{ width: `${(currentIndex / (stages.length - 1)) * 100}%` }}
             ></div>
           )}
           {isRejected && (
-            <div 
+            <div
               className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-red-500 rounded-full z-0 transition-all duration-500"
               style={{ width: `50%` }}
             ></div>
@@ -82,9 +81,6 @@ export default function CandidateApplicationsPage() {
 
           {stages.map((stage, idx) => {
             const isCompleted = !isRejected && currentIndex >= idx;
-            const isCurrent = !isRejected && currentIndex === idx;
-            const isFuture = !isRejected && currentIndex < idx;
-            
             return (
               <div key={stage} className="relative z-10 flex flex-col items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors duration-300
@@ -93,7 +89,7 @@ export default function CandidateApplicationsPage() {
                 </div>
                 <span className={`absolute top-10 whitespace-nowrap text-xs font-semibold
                   ${isCompleted ? 'text-gray-900' : 'text-gray-400'}`}>
-                  {stage}
+                  {STATUS_DISPLAY[stage]}
                 </span>
               </div>
             );
@@ -130,40 +126,20 @@ export default function CandidateApplicationsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <div className="glass bg-blue-50/50 border border-blue-100 rounded-3xl p-6 flex items-center gap-5 shadow-sm stagger-1">
-          <div className="bg-blue-100 p-3.5 rounded-2xl text-blue-600 shadow-sm">
-            <Briefcase className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-500 mb-1">Total</p>
-            <p className="text-3xl font-black text-gray-900">{stats.total}</p>
-          </div>
+          <div className="bg-blue-100 p-3.5 rounded-2xl text-blue-600 shadow-sm"><Briefcase className="w-6 h-6" /></div>
+          <div><p className="text-sm font-semibold text-gray-500 mb-1">Total</p><p className="text-3xl font-black text-gray-900">{stats.total}</p></div>
         </div>
         <div className="glass bg-amber-50/50 border border-amber-100 rounded-3xl p-6 flex items-center gap-5 shadow-sm stagger-2">
-          <div className="bg-amber-100 p-3.5 rounded-2xl text-amber-600 shadow-sm">
-            <Clock className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-500 mb-1">Pending</p>
-            <p className="text-3xl font-black text-gray-900">{stats.pending}</p>
-          </div>
+          <div className="bg-amber-100 p-3.5 rounded-2xl text-amber-600 shadow-sm"><Clock className="w-6 h-6" /></div>
+          <div><p className="text-sm font-semibold text-gray-500 mb-1">Pending</p><p className="text-3xl font-black text-gray-900">{stats.pending}</p></div>
         </div>
         <div className="glass bg-green-50/50 border border-green-100 rounded-3xl p-6 flex items-center gap-5 shadow-sm stagger-3">
-          <div className="bg-green-100 p-3.5 rounded-2xl text-green-600 shadow-sm">
-            <Eye className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-500 mb-1">Active</p>
-            <p className="text-3xl font-black text-gray-900">{stats.inReviewOrShortlisted}</p>
-          </div>
+          <div className="bg-green-100 p-3.5 rounded-2xl text-green-600 shadow-sm"><Eye className="w-6 h-6" /></div>
+          <div><p className="text-sm font-semibold text-gray-500 mb-1">Active</p><p className="text-3xl font-black text-gray-900">{stats.active}</p></div>
         </div>
         <div className="glass bg-red-50/50 border border-red-100 rounded-3xl p-6 flex items-center gap-5 shadow-sm stagger-4">
-          <div className="bg-red-100 p-3.5 rounded-2xl text-red-600 shadow-sm">
-            <XCircle className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-500 mb-1">Rejected</p>
-            <p className="text-3xl font-black text-gray-900">{stats.rejected}</p>
-          </div>
+          <div className="bg-red-100 p-3.5 rounded-2xl text-red-600 shadow-sm"><XCircle className="w-6 h-6" /></div>
+          <div><p className="text-sm font-semibold text-gray-500 mb-1">Rejected</p><p className="text-3xl font-black text-gray-900">{stats.rejected}</p></div>
         </div>
       </div>
 
@@ -173,17 +149,18 @@ export default function CandidateApplicationsPage() {
             <Briefcase className="w-10 h-10 text-blue-500" />
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-3">No Applications Yet</h3>
-          <p className="text-gray-500 max-w-md mx-auto text-base">Start applying to see your tracker here. Explore our job portal and find your dream job today.</p>
+          <p className="text-gray-500 max-w-md mx-auto text-base">Start applying to see your tracker here.</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {myApplications.map((app: any, idx: number) => {
+          {myApplications.map((app, idx) => {
             const staggerClass = `stagger-${(idx % 8) + 1}`;
-            const isPending = app.status?.toLowerCase() === 'pending' || app.status?.toLowerCase() === 'applied';
-            
+            const isPending = app.status === 'PENDING';
+            const status = app.status as ApplicationStatus;
+
             return (
-              <div 
-                key={app.id || idx} 
+              <div
+                key={app.id || idx}
                 className={`relative bg-white rounded-3xl border border-gray-100 p-6 pb-14 shadow-sm hover:shadow-md transition-all animate-slide-in-up ${staggerClass} overflow-hidden`}
               >
                 {app.isNew && (
@@ -194,30 +171,28 @@ export default function CandidateApplicationsPage() {
                     </div>
                   </>
                 )}
-                
+
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-xl font-extrabold shadow-sm">
-                      {getInitials(app.companyName)}
+                      {getInitials(app.company)}
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">{app.jobTitle}</h3>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mt-1.5 font-medium">
-                        <span className="flex items-center gap-1.5"><Building className="w-4 h-4 text-gray-400" /> {app.companyName || 'Unknown Company'}</span>
-                        <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-gray-400" /> Applied on {app.appliedDate || 'Recently'}</span>
+                        <span className="flex items-center gap-1.5"><Building className="w-4 h-4 text-gray-400" /> {app.company}</span>
+                        <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-gray-400" /> Applied on {app.appliedDate}</span>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className={`px-4 py-2 rounded-2xl border text-sm font-bold flex items-center gap-2.5 shadow-sm ${getStatusColor(app.status)}`}>
-                    {isPending && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-live-pulse" />
-                    )}
-                    {app.status || 'Applied'}
+
+                  <div className={`px-4 py-2 rounded-2xl border text-sm font-bold flex items-center gap-2.5 shadow-sm ${getStatusColor(status)}`}>
+                    {isPending && <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-live-pulse" />}
+                    {STATUS_DISPLAY[status]}
                   </div>
                 </div>
 
-                {renderTimeline(app.status)}
+                {renderTimeline(status)}
               </div>
             );
           })}

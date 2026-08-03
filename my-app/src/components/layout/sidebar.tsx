@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -28,6 +29,7 @@ interface SidebarItem {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const router = useRouter();
+  const { logout } = useAuth();
   const {
     role,
     setRole,
@@ -42,8 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const handleLogout = () => {
     setRole("guest");
-    router.push("/");
     onClose();
+    logout();
   };
   const candidateItems: SidebarItem[] = [
     {

@@ -4,6 +4,24 @@ import next from "next";
 import { initSocketServer } from "@/socket";
 import { logger } from "@/lib/logger";
 
+// ─── Fail-fast env validation ─────────────────────────────────────────────────
+// These must be present before anything else starts. A missing value here
+// would cause confusing downstream failures (Prisma connect errors, JWT
+// failures, etc.) — surface it immediately at boot instead.
+const REQUIRED_ENV_VARS = ["DATABASE_URL", "DIRECT_URL", "NEXTAUTH_SECRET"] as const;
+
+for (const key of REQUIRED_ENV_VARS) {
+  if (!process.env[key]) {
+    // Use console.error here because the logger itself may not be fully
+    // initialised, and we want this to always surface regardless of LOG_LEVEL.
+    console.error(
+      `[server] FATAL: required environment variable "${key}" is not set. ` +
+        "Copy .env.example to .env and fill in the values before starting.",
+    );
+    process.exit(1);
+  }
+}
+
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME ?? "0.0.0.0";
 const port = parseInt(process.env.PORT ?? "3000", 10);

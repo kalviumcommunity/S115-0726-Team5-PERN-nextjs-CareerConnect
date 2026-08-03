@@ -1,31 +1,23 @@
-import { Role } from "@prisma/client";
-import "next-auth";
-import "next-auth/jwt";
+import type {
+  Role,
+  ApplicationStatus,
+  JobType,
+  ExperienceLevel,
+  JobCategory,
+  NotificationType,
+} from "@prisma/client";
 
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      name: string;
-      email: string;
-      role: Role;
-    };
-  }
+// Re-export Prisma enums for convenience
+export type {
+  Role,
+  ApplicationStatus,
+  JobType,
+  ExperienceLevel,
+  JobCategory,
+  NotificationType,
+};
 
-  interface User {
-    id: string;
-    name: string;
-    email: string;
-    role: Role;
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
-    id: string;
-    role: Role;
-  }
-}
+// ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface AuthenticatedUser {
   id: string;
@@ -33,6 +25,8 @@ export interface AuthenticatedUser {
   email: string;
   role: Role;
 }
+
+// ─── Pagination ──────────────────────────────────────────────────────────────
 
 export interface PaginationParams {
   page: number;
@@ -45,6 +39,8 @@ export interface PaginatedResult<T> {
   page: number;
   limit: number;
 }
+
+// ─── Socket.IO Payloads ─────────────────────────────────────────────────────
 
 export type ApplicationStatusType =
   | "PENDING"
@@ -88,4 +84,19 @@ export interface SocketBatchUpdatedPayload {
     updatedAt: string;
   }>;
   status: ApplicationStatusType;
+}
+
+// ─── API Response Types ──────────────────────────────────────────────────────
+
+export interface ApiSuccessResponse<T = unknown> {
+  success: true;
+  message: string;
+  data: T;
+  meta?: Record<string, unknown>;
+}
+
+export interface ApiErrorResponse {
+  success: false;
+  message: string;
+  errors?: Array<{ field?: string; message: string }>;
 }
