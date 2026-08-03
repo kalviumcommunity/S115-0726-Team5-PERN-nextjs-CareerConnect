@@ -6,6 +6,9 @@ const jobInclude = {
   employer: {
     select: { id: true, name: true, email: true },
   },
+  companyRef: {
+    select: { id: true, name: true, logo: true, industry: true },
+  },
   _count: {
     select: { applications: true },
   },
@@ -39,10 +42,26 @@ export const jobRepository = {
   },
 
   async findMany(query: JobQueryInput) {
-    const { page, limit, search, location, sort, order, employerId } = query;
+    const {
+      page,
+      limit,
+      search,
+      location,
+      jobType,
+      experienceLevel,
+      category,
+      isActive,
+      sort,
+      order,
+      employerId,
+    } = query;
 
     const where: Prisma.JobWhereInput = {
       ...(employerId ? { employerId } : {}),
+      ...(isActive !== undefined ? { isActive } : { isActive: true }),
+      ...(jobType ? { jobType } : {}),
+      ...(experienceLevel ? { experienceLevel } : {}),
+      ...(category ? { category } : {}),
       ...(location
         ? { location: { contains: location, mode: "insensitive" } }
         : {}),
@@ -70,5 +89,13 @@ export const jobRepository = {
     ]);
 
     return { items, total, page, limit };
+  },
+
+  countByEmployer(employerId: string) {
+    return prisma.job.count({ where: { employerId } });
+  },
+
+  countActiveByEmployer(employerId: string) {
+    return prisma.job.count({ where: { employerId, isActive: true } });
   },
 };

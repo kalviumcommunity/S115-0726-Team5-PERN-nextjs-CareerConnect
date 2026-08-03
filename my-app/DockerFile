@@ -14,9 +14,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/job_tracker?schema=public"
-ENV NEXTAUTH_SECRET="build-time-secret"
-ENV NEXTAUTH_URL="http://localhost:3000"
+
+# Build-time env vars — these are only used during `next build` and are NOT
+# baked into the final image. Runtime values come from Cloud Run env/secrets.
+ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+ARG NEXTAUTH_SECRET="build-time-placeholder-secret-at-least-32-chars"
+ARG NEXTAUTH_URL="http://localhost:3000"
 
 RUN npx prisma generate
 RUN npm run build
@@ -45,5 +48,8 @@ COPY --from=builder /app/tsconfig.json ./tsconfig.json
 USER nextjs
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/auth/providers || exit 1
 
 CMD ["npx", "tsx", "server.ts"]

@@ -207,7 +207,8 @@ export default function CandidateJobsPage() {
                       <div className="flex flex-col sm:flex-row gap-6">
                         <div className="flex-shrink-0">
                           {job.company?.logo ? (
-                            <img src={job.company.logo} alt={job.company.name} className="w-16 h-16 rounded-2xl object-cover border border-gray-50" />
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={job.company.logo} alt={job.company.name ?? ""} className="w-16 h-16 rounded-2xl object-cover border border-gray-50" />
                           ) : (
                             <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xl">
                               {job.company?.name?.charAt(0) || "C"}

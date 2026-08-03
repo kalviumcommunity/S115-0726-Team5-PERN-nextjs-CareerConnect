@@ -1,13 +1,25 @@
-import { Prisma } from "@prisma/client";
+import { NotificationType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { NotificationQueryInput } from "@/lib/validations";
 
 export const notificationRepository = {
-  create(data: { userId: string; title: string; message: string }) {
+  create(data: {
+    userId: string;
+    title: string;
+    message: string;
+    type?: NotificationType;
+  }) {
     return prisma.notification.create({ data });
   },
 
-  createMany(data: Array<{ userId: string; title: string; message: string }>) {
+  createMany(
+    data: Array<{
+      userId: string;
+      title: string;
+      message: string;
+      type?: NotificationType;
+    }>,
+  ) {
     return prisma.notification.createMany({ data });
   },
 
@@ -46,6 +58,12 @@ export const notificationRepository = {
     return prisma.notification.updateMany({
       where: { userId, isRead: false },
       data: { isRead: true },
+    });
+  },
+
+  countUnread(userId: string) {
+    return prisma.notification.count({
+      where: { userId, isRead: false },
     });
   },
 };

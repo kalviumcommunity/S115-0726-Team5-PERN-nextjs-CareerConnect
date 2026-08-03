@@ -18,7 +18,7 @@ const applicationInclude = {
 } satisfies Prisma.ApplicationInclude;
 
 export const applicationRepository = {
-  create(data: { candidateId: string; jobId: string }) {
+  create(data: { candidateId: string; jobId: string; coverLetter?: string }) {
     return prisma.application.create({
       data,
       include: applicationInclude,
@@ -112,6 +112,22 @@ export const applicationRepository = {
     return prisma.application.findMany({
       where: { id: { in: ids } },
       include: applicationInclude,
+    });
+  },
+
+  countByStatusForCandidate(candidateId: string) {
+    return prisma.application.groupBy({
+      by: ["status"],
+      where: { candidateId },
+      _count: true,
+    });
+  },
+
+  countByStatusForEmployer(employerId: string) {
+    return prisma.application.groupBy({
+      by: ["status"],
+      where: { job: { employerId } },
+      _count: true,
     });
   },
 };

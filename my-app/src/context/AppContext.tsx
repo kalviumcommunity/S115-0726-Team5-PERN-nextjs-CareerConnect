@@ -1,9 +1,78 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useRef } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
+import { useSocketContext } from "@/providers/SocketProvider";
+import {
+  listJobs,
+  createJob,
+  type ApiJob,
+  type CreateJobPayload,
+} from "@/actions/jobs";
+import {
+  listApplications,
+  createApplication,
+  updateApplicationStatus as apiUpdateStatus,
+  batchUpdateApplicationStatus as apiBatchUpdate,
+  type ApiApplication,
+} from "@/actions/applications";
+import { listNotifications, markNotificationsRead } from "@/actions/notifications";
+import type { ApplicationStatus } from "@/types";
+import type {
+  SocketApplicationUpdatedPayload,
+  SocketBatchUpdatedPayload,
+  SocketNotificationPayload,
+} from "@/types";
+
+// ─── Status display labels ────────────────────────────────────────────────────
+// Prisma enum is the single source of truth; these labels are rendering-only.
+export const STATUS_DISPLAY: Record<ApplicationStatus, string> = {
+  PENDING: "Pending",
+  VIEWED: "Viewed",
+  SHORTLISTED: "Shortlisted",
+  REJECTED: "Rejected",
+  ACCEPTED: "Accepted",
+};
+
+// ─── Re-exported types ────────────────────────────────────────────────────────
+
+// Keep the Job shape as a plain object that pages can use
+export type { ApiJob as Job };
+
+// Keep the Application shape flat for pages
+export interface Application extends ApiApplication {
+  // Extra display fields derived client-side
+  candidateName: string;
+  candidateEmail: string;
+  candidateInitials: string;
+  jobTitle: string;
+  company: string;
+  appliedDate: string;
+  isNew?: boolean;
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  date: string;
+  read: boolean;
+}
+
+// ─── Role (for backwards compat with pages that still use it) ────────────────
 export type Role = "candidate" | "employer" | "guest";
 
+// ─── CandidateProfile ─────────────────────────────────────────────────────────
 export interface CandidateProfile {
   name: string;
   email: string;
@@ -24,44 +93,7 @@ export interface CandidateProfile {
   };
 }
 
-export interface Job {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary: string;
-  experience: string;
-  skills: string[];
-  description: string;
-  applied?: boolean;
-}
-
-export interface Application {
-  id: string;
-  candidateName: string;
-  candidateEmail: string;
-  candidatePhone: string;
-  candidateInitials: string;
-  jobTitle: string;
-  company: string;
-  appliedDate: string;
-  status: "Pending" | "Shortlisted" | "In Review" | "Rejected" | "Hired";
-  resumeUrl: string;
-  skills?: string[];
-  experience?: string;
-  education?: string;
-  bio?: string;
-  isNew?: boolean; // For shimmer animation on newly applied items
-}
-
-export interface AppNotification {
-  id: string;
-  type: "viewed" | "rejected" | "accepted" | "new_application";
-  title: string;
-  message: string;
-  date: string;
-  read: boolean;
-}
+// ─── Context shape ────────────────────────────────────────────────────────────
 
 interface AppContextProps {
   role: Role;
@@ -72,388 +104,317 @@ interface AppContextProps {
   setEmployerPage: (page: string) => void;
   profile: CandidateProfile;
   updateProfile: (updated: Partial<CandidateProfile>) => void;
-  jobs: Job[];
-  applyToJob: (jobId: string) => void;
-  postJob: (job: Omit<Job, "id">) => void;
+  jobs: ApiJob[];
+  jobsLoading: boolean;
+  applyToJob: (jobId: string) => Promise<void>;
+  postJob: (job: CreateJobPayload) => Promise<void>;
   applications: Application[];
-  updateApplicationStatus: (appId: string, status: Application["status"]) => void;
+  applicationsLoading: boolean;
+  updateApplicationStatus: (appId: string, status: ApplicationStatus) => Promise<void>;
   notifications: AppNotification[];
+  notificationsLoading: boolean;
   markNotificationsAsRead: () => void;
-  // New: Batch selection & update
   selectedAppIds: string[];
   setSelectedAppIds: React.Dispatch<React.SetStateAction<string[]>>;
   toggleAppSelection: (appId: string) => void;
   selectAllApps: (appIds: string[]) => void;
   deselectAllApps: () => void;
-  batchUpdateStatus: (status: Application["status"]) => void;
+  batchUpdateStatus: (status: ApplicationStatus) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function toApplication(a: ApiApplication, isNew = false): Application {
+  return {
+    ...a,
+    candidateName: a.candidate?.name ?? "Unknown",
+    candidateEmail: a.candidate?.email ?? "",
+    candidateInitials: (a.candidate?.name ?? "?")
+      .split(" ")
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase(),
+    jobTitle: a.job?.title ?? "Unknown Job",
+    company: a.job?.company ?? "Unknown Company",
+    appliedDate: a.createdAt
+      ? new Date(a.createdAt).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+      : "Recently",
+    isNew,
+  };
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { data: session, status: sessionStatus } = useSession();
+  const isAuthenticated = sessionStatus === "authenticated";
+  const userRole = session?.user?.role;
+
+  const { onApplicationUpdated, onApplicationBatchUpdated, onNotificationNew } =
+    useSocketContext();
+
+  // ── UI navigation state ───────────────────────────────────────────────────
   const [role, setRoleState] = useState<Role>("guest");
-  const [candidatePage, setCandidatePage] = useState<string>("dashboard");
-  const [employerPage, setEmployerPage] = useState<string>("dashboard");
+  const [candidatePage, setCandidatePage] = useState("dashboard");
+  const [employerPage, setEmployerPage] = useState("dashboard");
+
   const setRole = useCallback((newRole: Role) => {
     setRoleState(newRole);
-    if (newRole === "candidate") {
-      setCandidatePage("dashboard");
-    } else if (newRole === "employer") {
-      setEmployerPage("dashboard");
-    }
+    if (newRole === "candidate") setCandidatePage("dashboard");
+    else if (newRole === "employer") setEmployerPage("dashboard");
   }, []);
+
+  // Sync role with session; useEffect is fine here — role is UI state, not
+  // render-critical data, so one-render lag is acceptable.
+  useEffect(() => {
+    if (!isAuthenticated || !userRole) {
+      setRoleState("guest"); // eslint-disable-line react-hooks/set-state-in-effect
+    } else if (userRole === "CANDIDATE") {
+      setRoleState("candidate");
+    } else if (userRole === "EMPLOYER") {
+      setRoleState("employer");
+    }
+  }, [isAuthenticated, userRole]);
+
+  // ── Profile (local state — backed by session name/email) ─────────────────
   const [profile, setProfile] = useState<CandidateProfile>({
-    name: "Devansh Pujari",
-    email: "devansh.pujari@example.com",
-    phone: "+91 98765 43210",
-    location: "Bangalore, India",
-    dob: "12 Jan 2003",
+    name: session?.user?.name ?? "",
+    email: session?.user?.email ?? "",
+    phone: "",
+    location: "",
+    dob: "",
     status: "Actively looking for opportunities",
-    bio: "Passionate and detail-oriented developer with a strong foundation in building scalable web applications.",
-    avatar: "DP",
-    resumeName: "Devansh_Pujari_Resume.pdf",
-    resumeUpdated: "08 May 2025",
-    skills: ["React", "JavaScript", "HTML", "CSS", "Tailwind CSS", "Node.js", "Express.js", "MongoDB", "Git", "REST API"],
+    bio: "",
+    avatar: (session?.user?.name ?? "U").charAt(0).toUpperCase(),
+    resumeName: "",
+    resumeUpdated: "",
+    skills: [],
     preferences: {
-      roles: ["Frontend Developer", "UI/UX Designer"],
-      locations: ["Bangalore", "Hyderabad", "Pune"],
+      roles: [],
+      locations: [],
       jobTypes: "Full-time",
       experience: "1 - 3 Years",
     },
   });
-  const [jobs, setJobs] = useState<Job[]>([
-    {
-      id: "job-1",
-      title: "Frontend Developer",
-      company: "Tech Solutions",
-      location: "Bangalore, India",
-      salary: "₹8L - ₹12L",
-      experience: "1 - 3 Years",
-      skills: ["React", "JavaScript", "HTML", "CSS", "Tailwind CSS"],
-      description: "We are looking for a passionate Frontend Developer to build beautiful, responsive web applications using React and Tailwind CSS.",
-    },
-    {
-      id: "job-2",
-      title: "UI/UX Designer",
-      company: "Tech Solutions",
-      location: "Bangalore, India",
-      salary: "₹6L - ₹10L",
-      experience: "1 - 3 Years",
-      skills: ["Figma", "Adobe XD", "UI Design", "Prototyping"],
-      description: "Join our creative team to craft engaging, user-centered digital interfaces for web and mobile products.",
-    },
-    {
-      id: "job-3",
-      title: "Full Stack Developer",
-      company: "Tech Solutions",
-      location: "Bangalore, India",
-      salary: "₹12L - ₹18L",
-      experience: "3 - 5 Years",
-      skills: ["React", "Node.js", "Express.js", "MongoDB"],
-      description: "Looking for an experienced developer capable of handling both client-side and server-side logic in a MERN stack environment.",
-    },
-    {
-      id: "job-4",
-      title: "Backend Developer",
-      company: "Tech Solutions",
-      location: "Bangalore, India",
-      salary: "₹10L - ₹15L",
-      experience: "2 - 4 Years",
-      skills: ["Node.js", "Express.js", "PostgreSQL", "Redis"],
-      description: "Build robust, scalable APIs and microservices. Ensure high performance and low latency of backend requests.",
-    },
-    {
-      id: "job-5",
-      title: "DevOps Engineer",
-      company: "Tech Solutions",
-      location: "Bangalore, India",
-      salary: "₹14L - ₹20L",
-      experience: "3 - 5 Years",
-      skills: ["AWS", "Docker", "Kubernetes", "CI/CD"],
-      description: "Manage and optimize cloud deployment pipelines. Monitor application uptime, scaling, and system health.",
-    },
-  ]);
-  const [applications, setApplications] = useState<Application[]>([
-    {
-      id: "app-1",
-      candidateName: "Rohit Kumar",
-      candidateEmail: "rohit.kumar@email.com",
-      candidatePhone: "+91 98765 43210",
-      candidateInitials: "RK",
-      jobTitle: "Frontend Developer",
-      company: "Tech Solutions",
-      appliedDate: "08 May 2025",
-      status: "Pending",
-      resumeUrl: "Rohit_Kumar_Resume.pdf",
-      skills: ["React", "JavaScript", "TypeScript", "HTML5", "CSS3", "Tailwind CSS", "Bootstrap", "Git", "REST APIs", "Figma"],
-      experience: "Frontend Developer at Tech Solutions (Jan 2023 - Present)\nFrontend Developer at Webcraft Technologies (Aug 2021 - Dec 2022)",
-      education: "Bachelor of Computer Applications (BCA) at Christ University, Bangalore (2018 - 2021)",
-      bio: "Passionate Frontend Developer with 3+ years of experience building responsive, user-friendly web applications. Skilled in React, JavaScript, TypeScript, HTML5, CSS3, and modern CSS frameworks. Strong problem-solving abilities and a keen eye for detail."
-    },
-    {
-      id: "app-2",
-      candidateName: "Ananya Singh",
-      candidateEmail: "ananya.singh@email.com",
-      candidatePhone: "+91 98765 43211",
-      candidateInitials: "AS",
-      jobTitle: "UI/UX Designer",
-      company: "Tech Solutions",
-      appliedDate: "07 May 2025",
-      status: "Pending",
-      resumeUrl: "Ananya_Singh_Portfolio.pdf",
-      skills: ["Figma", "Sketch", "Adobe XD", "User Research", "Wireframing", "Prototyping", "Design Systems"],
-      experience: "UI/UX Designer at Creative Studio (Jul 2023 - Present)\nJunior Product Designer at AppForge (Sep 2022 - Jun 2023)",
-      education: "Bachelor of Design (B.Des) at National Institute of Design (2018 - 2022)",
-      bio: "Detail-oriented Product Designer focusing on creating intuitive interfaces and delightful user journeys. Specialized in mobile applications and design system creation."
-    },
-    {
-      id: "app-3",
-      candidateName: "Manish Patel",
-      candidateEmail: "manish.patel@email.com",
-      candidatePhone: "+91 98765 43212",
-      candidateInitials: "MP",
-      jobTitle: "Full Stack Developer",
-      company: "Tech Solutions",
-      appliedDate: "06 May 2025",
-      status: "Shortlisted",
-      resumeUrl: "Manish_Patel_Resume.pdf",
-      skills: ["React", "Node.js", "Express.js", "MongoDB", "Redux", "Docker", "AWS", "Next.js"],
-      experience: "Full Stack Engineer at ByteCode Corp (Mar 2022 - Present)\nSoftware Developer Intern at TechLab (Jan 2021 - Feb 2022)",
-      education: "B.Tech in Computer Science at NIT Trichy (2018 - 2022)",
-      bio: "Versatile Full Stack Developer with experience in MERN stack. Interested in system architecture, API optimization, and CI/CD pipelines."
-    },
-    {
-      id: "app-4",
-      candidateName: "Sneha Reddy",
-      candidateEmail: "sneha.reddy@email.com",
-      candidatePhone: "+91 98765 43213",
-      candidateInitials: "SR",
-      jobTitle: "Backend Developer",
-      company: "Tech Solutions",
-      appliedDate: "05 May 2025",
-      status: "In Review",
-      resumeUrl: "Sneha_Reddy_Resume.pdf",
-      skills: ["Node.js", "Python", "Django", "PostgreSQL", "Redis", "Kafka", "Docker", "GraphQL"],
-      experience: "Backend Developer at DataFlow Systems (Nov 2022 - Present)\nPython Developer at PyTech Solutions (Jun 2021 - Oct 2022)",
-      education: "M.Tech in Software Engineering at IIIT Bangalore (2019 - 2021)",
-      bio: "Backend specialist with passion for writing clean, optimized code. Expert in database design, caching mechanisms, and distributed message queues."
-    },
-    {
-      id: "app-5",
-      candidateName: "Nikhil Purohit",
-      candidateEmail: "nikhil.purohit@email.com",
-      candidatePhone: "+91 98765 43214",
-      candidateInitials: "NP",
-      jobTitle: "DevOps Engineer",
-      company: "Tech Solutions",
-      appliedDate: "04 May 2025",
-      status: "Rejected",
-      resumeUrl: "Nikhil_Purohit_Resume.pdf",
-      skills: ["AWS", "Terraform", "Kubernetes", "Docker", "Jenkins", "GitHub Actions", "Prometheus", "Grafana"],
-      experience: "DevOps Engineer at CloudScale Ltd (Feb 2023 - Present)\nSystems Administrator at WebHosting India (May 2021 - Jan 2023)",
-      education: "B.Sc in Computer Science at Delhi University (2018 - 2021)",
-      bio: "Infrastructure Automation Architect. Passionate about infrastructure as code, cloud cost optimization, and establishing high-availability production metrics."
-    },
-    {
-      id: "app-6",
-      candidateName: "Pooja Kapoor",
-      candidateEmail: "pooja.kapoor@email.com",
-      candidatePhone: "+91 98765 43215",
-      candidateInitials: "PK",
-      jobTitle: "UI/UX Designer",
-      company: "Tech Solutions",
-      appliedDate: "03 May 2025",
-      status: "Hired",
-      resumeUrl: "Pooja_Kapoor_Portfolio.pdf",
-      skills: ["Figma", "Adobe XD", "Wireframing", "Interaction Design", "Responsive Design", "Heuristic Evaluation"],
-      experience: "Interaction Designer at Pixel Perfect Agency (Apr 2023 - Present)\nUI Designer at InnoApp Studios (May 2021 - Mar 2023)",
-      education: "B.Des in Communication Design at NIFT Mumbai (2017 - 2021)",
-      bio: "User Experience Designer who bridges the gap between user needs and business objectives. Experienced in user interviews, high-fidelity mockups, and usability testing."
-    },
-    {
-      id: "app-dev-1",
-      candidateName: "Devansh Pujari",
-      candidateEmail: "devansh.pujari@example.com",
-      candidatePhone: "+91 98765 43210",
-      candidateInitials: "DP",
-      jobTitle: "UI/UX Designer",
-      company: "Tech Solutions",
-      appliedDate: "07 May 2025",
-      status: "Shortlisted",
-      resumeUrl: "Devansh_Pujari_Resume.pdf",
-      skills: ["React", "JavaScript", "HTML", "CSS", "Tailwind CSS", "Node.js", "Express.js", "MongoDB", "Git", "REST API"],
-      experience: "Passionate Frontend Developer with 2 years of experience.",
-      education: "Bachelor of Computer Applications (BCA) at Christ University (2020 - 2023)",
-      bio: "Passionate and detail-oriented developer with a strong foundation in building scalable web applications."
-    },
-    {
-      id: "app-dev-2",
-      candidateName: "Devansh Pujari",
-      candidateEmail: "devansh.pujari@example.com",
-      candidatePhone: "+91 98765 43210",
-      candidateInitials: "DP",
-      jobTitle: "Frontend Developer",
-      company: "Tech Solutions",
-      appliedDate: "08 May 2025",
-      status: "Pending",
-      resumeUrl: "Devansh_Pujari_Resume.pdf",
-      skills: ["React", "JavaScript", "HTML", "CSS", "Tailwind CSS", "Node.js", "Express.js", "MongoDB", "Git", "REST API"],
-      experience: "Passionate Frontend Developer with 2 years of experience.",
-      education: "Bachelor of Computer Applications (BCA) at Christ University (2020 - 2023)",
-      bio: "Passionate and detail-oriented developer with a strong foundation in building scalable web applications."
-    },
-  ]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([
-    {
-      id: "notif-1",
-      type: "viewed",
-      title: "Application Viewed",
-      message: "Tech Solutions viewed your application for Frontend Developer.",
-      date: "08 May 2025",
-      read: false,
-    },
-    {
-      id: "notif-2",
-      type: "accepted",
-      title: "Application Shortlisted",
-      message: "Congratulations! You have been shortlisted by Tech Solutions for UI/UX Designer.",
-      date: "07 May 2025",
-      read: false,
-    },
-    {
-      id: "notif-3",
-      type: "rejected",
-      title: "Application Status Update",
-      message: "Thank you for your interest in Tech Solutions. We regret to inform you that your application for DevOps Engineer has been rejected.",
-      date: "04 May 2025",
-      read: true,
-    },
-  ]);
 
-  // ===== Batch Selection State =====
-  const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
-
-  const profileRef = useRef(profile);
-  profileRef.current = profile;
-  const applicationsRef = useRef(applications);
-  applicationsRef.current = applications;
-  const jobsRef = useRef(jobs);
-  jobsRef.current = jobs;
-  const selectedAppIdsRef = useRef(selectedAppIds);
-  selectedAppIdsRef.current = selectedAppIds;
+  // Sync profile name/email when session resolves — keep it inside an effect
+  // to comply with react-hooks/refs (no ref reads during render).
+  const sessionName = session?.user?.name;
+  const sessionEmail = session?.user?.email;
+  useEffect(() => {
+    if (sessionName || sessionEmail) {
+      setProfile((prev) => ({ // eslint-disable-line react-hooks/set-state-in-effect
+        ...prev,
+        name: sessionName ?? prev.name,
+        email: sessionEmail ?? prev.email,
+        avatar: (sessionName ?? prev.avatar).charAt(0).toUpperCase(),
+      }));
+    }
+  }, [sessionName, sessionEmail]);
 
   const updateProfile = useCallback((updated: Partial<CandidateProfile>) => {
     setProfile((prev) => ({ ...prev, ...updated }));
     toast.success("Profile updated successfully!");
   }, []);
-  const applyToJob = useCallback((jobId: string) => {
-    const job = jobsRef.current.find((j) => j.id === jobId);
-    if (!job) return;
 
-    if (job.applied) {
-      toast.error("You have already applied to this job.");
-      return;
+  // ── Jobs ─────────────────────────────────────────────────────────────────
+  const [jobs, setJobs] = useState<ApiJob[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+
+  const fetchJobs = useCallback(async () => {
+    setJobsLoading(true);
+    const result = await listJobs({ limit: 50 });
+    if (result.success) {
+      setJobs(result.data ?? []);
     }
-
-    const p = profileRef.current;
-    setJobs((prevJobs) =>
-      prevJobs.map((j) => (j.id === jobId ? { ...j, applied: true } : j))
-    );
-    const newApp: Application = {
-      id: `app-${Date.now()}`,
-      candidateName: p.name,
-      candidateEmail: p.email,
-      candidatePhone: p.phone,
-      candidateInitials: p.avatar,
-      jobTitle: job.title,
-      company: job.company,
-      appliedDate: new Date().toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-      status: "Pending",
-      resumeUrl: p.resumeName,
-      skills: p.skills,
-      experience: "Candidate profile simulated experience",
-      education: "Candidate profile simulated education",
-      bio: p.bio,
-      isNew: true,
-    };
-
-    setApplications((prevApps) => [newApp, ...prevApps]);
-    const newNotif: AppNotification = {
-      id: `notif-${Date.now()}`,
-      type: "new_application",
-      title: "Application Submitted!",
-      message: `Your application for ${job.title} at ${job.company} has been submitted successfully.`,
-      date: "Just now",
-      read: false,
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-
-    // Clear the isNew flag after animation completes
-    setTimeout(() => {
-      setApplications((prevApps) =>
-        prevApps.map((app) =>
-          app.id === newApp.id ? { ...app, isNew: false } : app
-        )
-      );
-    }, 3000);
-
-    toast.success(`Successfully applied for ${job.title}!`);
+    setJobsLoading(false);
   }, []);
-  const postJob = useCallback((jobData: Omit<Job, "id">) => {
-    const newJob: Job = {
-      ...jobData,
-      id: `job-${Date.now()}`,
-    };
-    setJobs((prevJobs) => [newJob, ...prevJobs]);
-    toast.success("New job posted successfully!");
-  }, []);
-  const updateApplicationStatus = useCallback((appId: string, status: Application["status"]) => {
-    setApplications((prevApps) =>
-      prevApps.map((app) => (app.id === appId ? { ...app, status } : app))
-    );
-    const app = applicationsRef.current.find((a) => a.id === appId);
-    if (app) {
-      let type: AppNotification["type"] = "viewed";
-      let title = "Application Update";
-      let message = `Your application status for ${app.jobTitle} at ${app.company} has been updated to ${status}.`;
 
-      if (status === "Shortlisted" || status === "Hired") {
-        type = "accepted";
-        title = `Application ${status}!`;
-        message = `Congratulations! You have been ${status.toLowerCase()} by ${app.company} for the ${app.jobTitle} role.`;
-      } else if (status === "Rejected") {
-        type = "rejected";
-        title = "Application Rejected";
-        message = `We appreciate your time, but ${app.company} has updated your application for ${app.jobTitle} to Rejected.`;
-      } else if (status === "In Review") {
-        type = "viewed";
-        title = "Application In Review";
-        message = `${app.company} has updated your application for ${app.jobTitle} to In Review.`;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchJobs();
+  }, [fetchJobs]);
+
+  const postJob = useCallback(
+    async (jobData: CreateJobPayload) => {
+      const result = await createJob(jobData);
+      if (result.success) {
+        setJobs((prev) => [result.data, ...prev]);
+        toast.success("New job posted successfully!");
+      } else {
+        toast.error(result.message ?? "Failed to post job");
       }
+    },
+    [],
+  );
 
-      const newNotif: AppNotification = {
-        id: `notif-${Date.now()}`,
-        type,
-        title,
-        message,
-        date: "Just now",
-        read: false,
-      };
+  // ── Applications ─────────────────────────────────────────────────────────
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
 
-      setNotifications((prev) => [newNotif, ...prev]);
+  const fetchApplications = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setApplicationsLoading(true);
+    const result = await listApplications({ limit: 100 });
+    if (result.success) {
+      setApplications((result.data ?? []).map((a) => toApplication(a)));
     }
+    setApplicationsLoading(false);
+  }, [isAuthenticated]);
 
-    toast.success(`Application status updated to ${status}`);
-  }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isAuthenticated) fetchApplications();
+  }, [isAuthenticated, fetchApplications]);
 
-  // ===== Batch Selection Helpers =====
+  // Live socket: single application status update
+  useEffect(() => {
+    const unsub = onApplicationUpdated(
+      (payload: SocketApplicationUpdatedPayload) => {
+        setApplications((prev) =>
+          prev.map((app) =>
+            app.id === payload.application.id
+              ? { ...app, status: payload.application.status }
+              : app,
+          ),
+        );
+      },
+    );
+    return unsub;
+  }, [onApplicationUpdated]);
+
+  // Live socket: batch application status update
+  useEffect(() => {
+    const unsub = onApplicationBatchUpdated(
+      (payload: SocketBatchUpdatedPayload) => {
+        const updateMap = new Map(
+          payload.applications.map((a) => [a.id, a.status]),
+        );
+        setApplications((prev) =>
+          prev.map((app) => {
+            const newStatus = updateMap.get(app.id);
+            return newStatus ? { ...app, status: newStatus } : app;
+          }),
+        );
+      },
+    );
+    return unsub;
+  }, [onApplicationBatchUpdated]);
+
+  // Re-sync on reconnect (acceptance criterion #5)
+  const { isConnected } = useSocketContext();
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    if (!prevConnected.current && isConnected && isAuthenticated) {
+      // Transitioned from disconnected → connected: re-fetch to reconcile
+      fetchApplications();
+    }
+    prevConnected.current = isConnected;
+  }, [isConnected, isAuthenticated, fetchApplications]);
+
+  const applyToJob = useCallback(
+    async (jobId: string) => {
+      const job = jobs.find((j) => j.id === jobId);
+      if (!job) return;
+
+      // Optimistic insert so the candidate sees "Pending" immediately
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimistic: Application = {
+        id: optimisticId,
+        candidateId: session?.user?.id ?? "",
+        jobId,
+        status: "PENDING",
+        candidate: {
+          id: session?.user?.id ?? "",
+          name: session?.user?.name ?? "",
+          email: session?.user?.email ?? "",
+        },
+        job: {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          employerId: job.employerId,
+        },
+        candidateName: session?.user?.name ?? "",
+        candidateEmail: session?.user?.email ?? "",
+        candidateInitials: (session?.user?.name ?? "U").charAt(0).toUpperCase(),
+        jobTitle: job.title,
+        company: job.company,
+        appliedDate: new Date().toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }),
+        isNew: true,
+      };
+      setApplications((prev) => [optimistic, ...prev]);
+
+      const result = await createApplication({ jobId });
+      if (result.success) {
+        // Replace optimistic row with real server response
+        setApplications((prev) =>
+          prev.map((app) =>
+            app.id === optimisticId ? toApplication(result.data, true) : app,
+          ),
+        );
+        toast.success(`Applied for ${job.title}!`);
+
+        // Clear isNew flag after shimmer animation
+        const realId = result.data.id;
+        setTimeout(() => {
+          setApplications((prev) =>
+            prev.map((app) =>
+              app.id === realId ? { ...app, isNew: false } : app,
+            ),
+          );
+        }, 3000);
+      } else {
+        // Roll back the optimistic insert
+        setApplications((prev) => prev.filter((app) => app.id !== optimisticId));
+        toast.error(result.message ?? "Failed to submit application");
+      }
+    },
+    [jobs, session?.user],
+  );
+
+  const updateApplicationStatus = useCallback(
+    async (appId: string, status: ApplicationStatus) => {
+      // Optimistic update
+      setApplications((prev) =>
+        prev.map((app) => (app.id === appId ? { ...app, status } : app)),
+      );
+
+      const result = await apiUpdateStatus(appId, status);
+      if (!result.success) {
+        // Roll back
+        fetchApplications();
+        toast.error(result.message ?? "Failed to update status");
+      }
+    },
+    [fetchApplications],
+  );
+
+  // ── Batch selection ───────────────────────────────────────────────────────
+  const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
+  // Keep a ref in sync inside an effect so we never read .current during render
+  const selectedAppIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    selectedAppIdsRef.current = selectedAppIds;
+  }, [selectedAppIds]);
+
   const toggleAppSelection = useCallback((appId: string) => {
     setSelectedAppIds((prev) =>
-      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId]
+      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId],
     );
   }, []);
 
@@ -465,59 +426,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedAppIds([]);
   }, []);
 
-  const batchUpdateStatus = useCallback((status: Application["status"]) => {
-    const ids = selectedAppIdsRef.current;
-    if (ids.length === 0) {
-      toast.error("No applications selected.");
-      return;
-    }
-
-    setApplications((prevApps) =>
-      prevApps.map((app) =>
-        ids.includes(app.id) ? { ...app, status } : app
-      )
-    );
-
-    // Generate notifications for each updated application
-    const apps = applicationsRef.current.filter((a) => ids.includes(a.id));
-    const newNotifs: AppNotification[] = apps.map((app) => {
-      let type: AppNotification["type"] = "viewed";
-      let title = "Application Update";
-      let message = `Your application for ${app.jobTitle} at ${app.company} has been updated to ${status}.`;
-
-      if (status === "Shortlisted" || status === "Hired") {
-        type = "accepted";
-        title = `Application ${status}!`;
-        message = `Congratulations! You have been ${status.toLowerCase()} by ${app.company} for the ${app.jobTitle} role.`;
-      } else if (status === "Rejected") {
-        type = "rejected";
-        title = "Application Rejected";
-        message = `${app.company} has updated your application for ${app.jobTitle} to Rejected.`;
-      } else if (status === "In Review") {
-        type = "viewed";
-        title = "Application In Review";
-        message = `${app.company} is reviewing your application for ${app.jobTitle}.`;
+  const batchUpdateStatus = useCallback(
+    async (status: ApplicationStatus) => {
+      const ids = selectedAppIdsRef.current;
+      if (ids.length === 0) {
+        toast.error("No applications selected.");
+        return;
       }
 
-      return {
-        id: `notif-batch-${Date.now()}-${app.id}`,
-        type,
-        title,
-        message,
-        date: "Just now",
-        read: false,
-      };
+      // Optimistic update on employer's own list immediately
+      setApplications((prev) =>
+        prev.map((app) => (ids.includes(app.id) ? { ...app, status } : app)),
+      );
+      setSelectedAppIds([]);
+
+      const result = await apiBatchUpdate(ids, status);
+      if (!result.success) {
+        // Roll back
+        fetchApplications();
+        toast.error(result.message ?? "Batch update failed");
+      } else {
+        toast.success(
+          `Updated ${result.data.length} application${result.data.length !== 1 ? "s" : ""} to ${STATUS_DISPLAY[status]}`,
+        );
+      }
+    },
+    [fetchApplications],
+  );
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setNotificationsLoading(true);
+    const result = await listNotifications({ limit: 50 });
+    if (result.success) {
+      setNotifications(
+        (result.data ?? []).map((n) => ({
+          id: n.id,
+          userId: n.userId,
+          type: n.type.toLowerCase(),
+          title: n.title,
+          message: n.message,
+          date: n.createdAt,
+          read: n.isRead,
+        })),
+      );
+    }
+    setNotificationsLoading(false);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isAuthenticated) fetchNotifications();
+  }, [isAuthenticated, fetchNotifications]);
+
+  // Live socket: new notification
+  useEffect(() => {
+    const unsub = onNotificationNew((payload: SocketNotificationPayload) => {
+      const n = payload.notification;
+      setNotifications((prev) => {
+        if (prev.some((existing) => existing.id === n.id)) return prev;
+        return [
+          {
+            id: n.id,
+            userId: n.userId,
+            type: "general",
+            title: n.title,
+            message: n.message,
+            date: n.createdAt,
+            read: n.isRead,
+          },
+          ...prev,
+        ];
+      });
     });
-
-    setNotifications((prev) => [...newNotifs, ...prev]);
-    setSelectedAppIds([]);
-
-    toast.success(`${ids.length} application${ids.length > 1 ? "s" : ""} updated to ${status}`);
-  }, []);
+    return unsub;
+  }, [onNotificationNew]);
 
   const markNotificationsAsRead = useCallback(() => {
+    const unreadIds = notifications
+      .filter((n) => !n.read)
+      .map((n) => n.id);
+
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+
+    if (unreadIds.length > 0) {
+      markNotificationsRead(unreadIds).catch(() => {
+        // Non-critical — local state is already optimistically updated
+      });
+    }
+  }, [notifications]);
 
   return (
     <AppContext.Provider
@@ -531,13 +532,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         profile,
         updateProfile,
         jobs,
+        jobsLoading,
         applyToJob,
         postJob,
         applications,
+        applicationsLoading,
         updateApplicationStatus,
         notifications,
+        notificationsLoading,
         markNotificationsAsRead,
-        // Batch selection
         selectedAppIds,
         setSelectedAppIds,
         toggleAppSelection,
@@ -551,10 +554,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error("useApp must be used within an AppProvider");
-  }
-  return context;
-};
+export function useApp(): AppContextProps {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useApp must be used inside <AppProvider>");
+  return ctx;
+}
