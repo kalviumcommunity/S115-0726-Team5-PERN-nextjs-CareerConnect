@@ -3,7 +3,9 @@ import { parse } from "url";
 import next from "next";
 import { initSocketServer } from "@/socket";
 import { logger } from "@/lib/logger";
+import dotenv from "dotenv";
 
+dotenv.config();
 // ─── Fail-fast env validation ─────────────────────────────────────────────────
 // These must be present before anything else starts. A missing value here
 // would cause confusing downstream failures (Prisma connect errors, JWT
@@ -21,7 +23,7 @@ for (const key of REQUIRED_ENV_VARS) {
     process.exit(1);
   }
 }
-
+// console.log(process.env.DATABASE_URL);
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME ?? "0.0.0.0";
 const port = parseInt(process.env.PORT ?? "3000", 10);
