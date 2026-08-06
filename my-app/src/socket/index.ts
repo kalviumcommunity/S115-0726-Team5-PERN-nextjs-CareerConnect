@@ -1,8 +1,7 @@
 import { Server } from "socket.io";
+import { decode } from "next-auth/jwt";
 import { setIO } from "./emitter";
 import { logger } from "@/lib/logger";
-// Using require() because the jsonwebtoken package lacks a proper ESM export
-const jwt = require("jsonwebtoken") as { verify: (t: string, s: string) => Record<string, unknown> };
 
 export function initSocketServer(httpServer: any) {
   const io = new Server(httpServer, {
@@ -14,10 +13,10 @@ export function initSocketServer(httpServer: any) {
     pingInterval: 25000
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token;
-      if (!token) {
+      if (!token || typeof token !== "string") {
         return next(new Error("Authentication error: No token provided"));
       }
 
@@ -26,7 +25,17 @@ export function initSocketServer(httpServer: any) {
         return next(new Error("Internal server error"));
       }
 
-      const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET) as Record<string, unknown>;
+      // next-auth's encode() produces a JWE (encrypted JWT), so we must use
+      // next-auth's decode() — plain jsonwebtoken.verify() cannot handle JWE.
+      const decoded = await decode({
+        token,
+        secret: process.env.NEXTAUTH_SECRET,
+      });
+
+      if (!decoded) {
+        return next(new Error("Authentication error: Invalid token"));
+      }
+
       socket.data.userId = (decoded.id ?? decoded.sub) as string;
       socket.data.userRole = decoded.role as string;
       next();
