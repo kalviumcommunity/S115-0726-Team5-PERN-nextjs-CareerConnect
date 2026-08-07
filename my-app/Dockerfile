@@ -15,9 +15,11 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build-time env vars — these are only used during `next build` and are NOT
-# baked into the final image. Runtime values come from Cloud Run env/secrets.
+# Build-time-only placeholders so `next build` can statically evaluate src/lib/env.ts.
+# Render auto-passes any matching env vars you set in the dashboard/render.yaml as
+# Docker build args, so real values take over automatically when configured there.
 ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+ARG DIRECT_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ARG NEXTAUTH_SECRET="build-time-placeholder-secret-at-least-32-chars"
 ARG NEXTAUTH_URL="http://localhost:3000"
 
@@ -30,7 +32,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
-ENV PORT=8080
+# No hardcoded ENV PORT here — Render injects PORT itself (default 10000) and
+# server.ts already reads process.env.PORT. Don't shadow it with a fixed value.
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -47,9 +50,9 @@ COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 USER nextjs
 
-EXPOSE 8080
+EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/auth/providers || exit 1
+  CMD wget --no-verbose --tries=1 --spider "http://localhost:${PORT:-10000}/" || exit 1
 
 CMD ["npx", "tsx", "server.ts"]
