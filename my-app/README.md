@@ -15,7 +15,7 @@ A production-ready job portal built with Next.js App Router, PostgreSQL, Prisma,
 | Real-time | Socket.IO |
 | Logging | Pino |
 | Styling | Tailwind CSS 4 |
-| Deployment | Docker / Google Cloud Run |
+| Deployment | Docker / Render |
 
 ## Architecture
 
@@ -56,7 +56,7 @@ src/
 ├── socket/                 # Socket.IO server + emitter
 ├── types/                  # TypeScript types + declarations
 ├── utils/                  # Utility functions
-└── middleware.ts           # Next.js middleware (auth + security)
+└── proxy.ts               # Next.js 16 proxy (auth + security)
 ```
 
 ## Getting Started
@@ -106,8 +106,9 @@ npm run dev
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | DATABASE_URL | Yes | — | PostgreSQL connection string |
+| DIRECT_URL | Yes | — | Prisma direct (non-pooled) connection string |
 | NEXTAUTH_SECRET | Yes | — | JWT signing secret (min 32 chars) |
-| NEXTAUTH_URL | Yes | — | Application URL |
+| NEXTAUTH_URL | Yes | — | Application URL (must match public URL in production) |
 | NODE_ENV | No | development | Environment mode |
 | PORT | No | 3000 | Server port |
 | LOG_LEVEL | No | info | Logging level |
@@ -164,11 +165,12 @@ npm run dev
 # Build the image
 docker build -t careerconnect .
 
-# Run the container
-docker run -p 8080:8080 \
+# Run the container locally
+docker run -p 10000:10000 \
   -e DATABASE_URL="your-db-url" \
+  -e DIRECT_URL="your-db-url" \
   -e NEXTAUTH_SECRET="your-secret" \
-  -e NEXTAUTH_URL="http://localhost:8080" \
+  -e NEXTAUTH_URL="http://localhost:10000" \
   careerconnect
 ```
 
