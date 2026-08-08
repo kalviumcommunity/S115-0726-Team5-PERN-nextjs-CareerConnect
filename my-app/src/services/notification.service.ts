@@ -44,7 +44,7 @@ export const notificationService = {
       message,
     });
 
-    socketService.emitNotificationNew(userId, {
+    await socketService.emitNotificationNew(userId, {
       notification: {
         id: notification.id,
         userId: notification.userId,
