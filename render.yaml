@@ -1,34 +1,16 @@
-databases:
-  - name: careerconnect-db
-    plan: free   # fine to start; move to a paid plan before this needs to be reliable
-
 services:
   - type: web
-    name: careerconnect
-    runtime: docker
+    name: careerconnect-sockets
+    runtime: node
     plan: starter
-    dockerfilePath: my-app/Dockerfile
-    dockerContext: my-app
+    rootDir: sockets
+    buildCommand: npm ci
+    startCommand: npm run start
     healthCheckPath: /
-    preDeployCommand: npx prisma migrate deploy
-    # region: singapore   # uncomment for lower latency from India; default is oregon
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: careerconnect-db
-          property: connectionString
-      - key: DIRECT_URL
-        fromDatabase:
-          name: careerconnect-db
-          property: connectionString
       - key: NEXTAUTH_SECRET
-        generateValue: true
-      - key: NEXTAUTH_URL
-        fromService:
-          name: careerconnect
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: LOG_LEVEL
-        value: info
+        sync: false   # must exactly match the value set on the Vercel app
+      - key: SOCKET_RELAY_SECRET
+        sync: false   # must exactly match the value set on the Vercel app
+      - key: APP_ORIGIN
+        value: https://REPLACE-WITH-YOUR-VERCEL-DOMAIN.vercel.app

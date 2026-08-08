@@ -34,14 +34,18 @@ export function useSocket(): UseSocketReturn {
       return;
     }
 
-    const socket = io({
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+    const socketOptions = {
       path: "/socket.io",
       auth: { token: session.token },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
-    });
+    };
+    const socket = socketUrl
+      ? io(socketUrl, socketOptions)
+      : io(socketOptions);
 
     socketRef.current = socket;
     setSocketInstance(socket);

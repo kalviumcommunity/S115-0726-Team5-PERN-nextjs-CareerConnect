@@ -54,7 +54,7 @@ async function notifyStatusChange(
 
   await notificationService.createAndNotify(candidateId, title, message);
 
-  socketService.emitApplicationUpdated(candidateId, {
+  await socketService.emitApplicationUpdated(candidateId, {
     application: {
       id: application.id,
       candidateId: application.candidateId,
@@ -208,7 +208,7 @@ export const applicationService = {
       );
     }
 
-    socketService.emitApplicationBatchUpdated(candidateIds, {
+    await socketService.emitApplicationBatchUpdated(candidateIds, {
       applications: updatedApplications.map((app) => ({
         id: app.id,
         candidateId: app.candidateId,
