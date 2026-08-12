@@ -41,16 +41,20 @@ export function handleApiError(error: unknown): NextResponse<ApiErrorResponse> {
   if (error instanceof ValidationError) {
     const zodErrors = error.details as { fieldErrors?: Record<string, string[]> } | undefined;
     const errors: Array<{ field?: string; message: string }> = [];
+    let detailedMessage = error.message;
 
     if (zodErrors?.fieldErrors) {
+      const parts = [];
       for (const [field, messages] of Object.entries(zodErrors.fieldErrors)) {
         for (const msg of messages as string[]) {
           errors.push({ field, message: msg });
+          parts.push(`${field}: ${msg}`);
         }
       }
+      if (parts.length > 0) detailedMessage += " - " + parts.join(", ");
     }
 
-    return errorResponse(error.message, error.statusCode, errors);
+    return errorResponse(detailedMessage, error.statusCode, errors);
   }
 
   if (error instanceof AppError) {
