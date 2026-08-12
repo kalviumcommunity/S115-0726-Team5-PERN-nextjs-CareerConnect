@@ -200,8 +200,20 @@ export default function CandidateJobsPage() {
                           </span>
                         ))}
                       </div>
-                      <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap ml-4">Posted {idx + 1}h ago</span>
-                    </div>
+                      <div className="flex items-center gap-4 ml-4 shrink-0">
+                        <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap">Posted {idx + 1}h ago</span>
+                        <button
+                          onClick={() => applyToJob(job.id)}
+                          disabled={job.applied}
+                          className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                            job.applied 
+                              ? "bg-gray-100 text-gray-500 cursor-not-allowed border border-gray-200" 
+                              : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 hover:shadow-md border border-transparent"
+                          }`}
+                        >
+                          {job.applied ? "Applied" : "Apply"}
+                        </button>
+                      </div>
                   </div>
                 </div>
               ))}

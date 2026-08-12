@@ -7,7 +7,7 @@ export const RegisterSchema = z.object({
     .string()
     .min(6, "Password must be at least 6 characters")
     .max(128),
-  role: z.enum(["CANDIDATE", "EMPLOYER"]),
+  role: z.enum(["CANDIDATE", "EMPLOYER", "candidate", "employer"]).transform(val => val.toUpperCase() as "CANDIDATE" | "EMPLOYER"),
 });
 
 export const LoginSchema = z.object({

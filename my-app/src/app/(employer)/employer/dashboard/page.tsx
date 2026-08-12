@@ -4,8 +4,10 @@ import React, { useState } from "react";
 import { useApp, Application } from "@/context/AppContext";
 import { Search, ChevronDown, Calendar, Briefcase, FileText, CheckCircle2, XCircle, ArrowRight, Clock } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function EmployerDashboard() {
+  const router = useRouter();
   const { applications, updateApplicationStatus, jobs, setEmployerPage } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -53,7 +55,10 @@ export default function EmployerDashboard() {
           <p className="text-sm text-gray-500 mt-1">Here&apos;s what&apos;s happening with your jobs today.</p>
         </div>
         <button
-          onClick={() => setEmployerPage("post-job")}
+          onClick={() => {
+            setEmployerPage("post-job");
+            router.push("/employer/post-job");
+          }}
           className="px-4.5 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 flex items-center gap-1"
         >
           Post a New Job <ArrowRight className="w-3.5 h-3.5" />
