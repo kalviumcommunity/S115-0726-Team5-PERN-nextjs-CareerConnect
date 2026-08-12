@@ -4,6 +4,7 @@ import { ValidationError } from "@/lib/errors";
 export function parseBody<T>(schema: ZodSchema<T>, body: unknown): T {
   const result = schema.safeParse(body);
   if (!result.success) {
+    console.error("Zod Validation Error! Body:", body, "Error:", result.error.flatten());
     throw new ValidationError("Validation failed", result.error.flatten());
   }
   return result.data;
